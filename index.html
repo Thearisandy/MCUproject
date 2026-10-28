@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Check-in MCU</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<style>
+:root{
+  --navy:#0d2038; --navy-2:#16304f; --teal:#0e7c86; --teal-2:#128a96;
+  --bg:#f3f4f6; --card:#fff; --line:#e3e7ed; --ink:#0d1b2e; --muted:#5f6c7e;
+  --ok:#14866d; --warn:#c77d0a; --bad:#c9403a; --track:#e1e6ee;
+}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%}
+body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:15px;-webkit-tap-highlight-color:transparent}
+.app{display:flex;min-height:100%}
+/* Sidebar */
+.side{width:196px;background:var(--navy);padding:22px 6px;position:fixed;inset:0 auto 0 0;display:flex;flex-direction:column;gap:4px}
+.brand{color:#fff;font-weight:800;font-size:17px;padding:0 10px 18px}
+.nav{all:unset;box-sizing:border-box;cursor:pointer;color:#c9d3e0;padding:10px 11px;border-radius:9px;font-weight:500;font-size:14px}
+.nav:hover{background:var(--navy-2)}
+.nav:focus-visible{outline:2px solid #7fd3da;outline-offset:1px}
+.nav.on{background:linear-gradient(90deg,var(--teal),var(--teal-2));color:#fff;font-weight:600}
+/* Main */
+main{margin-left:196px;flex:1;padding:28px 28px 40px;max-width:1100px}
+h1{font-size:22px;font-weight:800;margin-bottom:18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px 22px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+.card h3{font-size:13.5px;font-weight:700;margin-bottom:12px}
+.muted{color:var(--muted)}
+.big{font-size:30px;font-weight:800}
+.sum{margin-top:6px;font-size:15px}
+.bar{height:12px;border-radius:99px;background:var(--track);margin:16px 0 12px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--ok);border-radius:99px;width:0;transition:width .5s}
+.legend{display:flex;gap:16px;font-size:12.5px;font-weight:600;flex-wrap:wrap}
+.legend span::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;background:currentColor}
+.l-ok{color:var(--ok)}.l-bad{color:var(--bad)}
+.legend b{color:var(--muted);font-weight:500;margin-left:4px}
+.list{list-style:none;padding:0;font-size:14px}
+.list li{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
+.list li:first-child{border-top:0}
+.empty{color:var(--muted);font-size:14px}
+/* Check in */
+.scanrow{display:flex;gap:10px;flex-wrap:wrap}
+input[type=text]{flex:1;min-width:0;font:inherit;padding:13px 14px;border:1.5px solid var(--line);border-radius:12px;background:#fff}
+input[type=text]:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px rgba(14,124,134,.15)}
+.btn{font:inherit;font-weight:700;border:0;border-radius:12px;padding:13px 18px;cursor:pointer;background:var(--teal);color:#fff}
+.btn:hover{background:var(--teal-2)}
+.btn.ghost{background:#fff;color:var(--teal);border:1.5px solid var(--teal)}
+.btn:disabled{background:#b9c2cf;cursor:not-allowed}
+.btn:focus-visible{outline:3px solid #7fd3da;outline-offset:2px}
+#reader{display:none;margin-top:14px;border-radius:12px;overflow:hidden}
+#hasil{margin-top:16px}
+.who{font-size:24px;font-weight:800;line-height:1.2}
+.kode{color:var(--muted);font-size:13px;margin-top:2px}
+.badge{display:inline-block;font-size:12.5px;font-weight:700;padding:5px 11px;border-radius:99px;margin-top:12px}
+.b-ok{background:#dcf3ec;color:var(--ok)}.b-bad{background:#fbe3e1;color:var(--bad)}.b-warn{background:#fcefd6;color:var(--warn)}
+.det{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:18px 0}
+.det div small{display:block;color:var(--muted);font-size:12px;margin-bottom:2px}
+.det div span{font-weight:600}
+.btn.go{width:100%;padding:17px;font-size:17px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px}.chip{font-size:12.5px;font-weight:600;padding:5px 11px;border-radius:99px;background:var(--track);color:var(--muted)}.chip.done{background:#dcf3ec;color:var(--ok)}
+.labels{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;margin-top:16px}
+.lbl{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 12px;text-align:center;break-inside:avoid}
+.lbl .ln{font-weight:700;margin-bottom:8px;font-size:14px}
+.lbl svg{max-width:100%;height:auto}
+@media print{.side,.mtitle,#toast,.noprint,#v-barcode h1{display:none!important}main{margin:0;padding:0;max-width:none}body{background:#fff}.labels{margin-top:0;gap:8px}.lbl{border-radius:0;border-color:#888}}
+.modes{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.mode{font:inherit;font-weight:600;font-size:13px;padding:8px 14px;border-radius:99px;border:1.5px solid var(--line);background:#fff;color:var(--muted);cursor:pointer}
+.mode.on{background:var(--teal);border-color:var(--teal);color:#fff}
+.mode:focus-visible{outline:3px solid #7fd3da;outline-offset:2px}
+.auto{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13.5px;color:var(--muted)}
+#login{position:fixed;inset:0;background:var(--navy);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
+.lbox{background:#fff;border-radius:16px;padding:24px;width:100%;max-width:340px}
+.nav.out{margin-top:auto;color:#9fb0c6}
+@media (max-width:800px){.nav.out{margin-top:0}}
+/* Peserta */
+.tw{overflow-x:auto;margin-top:14px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:10px 8px;border-top:1px solid var(--line);white-space:nowrap}
+th{font-size:12.5px;color:var(--muted);font-weight:600;border-top:0}
+/* Toast */
+#toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%) translateY(20px);background:var(--navy);color:#fff;padding:12px 18px;border-radius:12px;font-weight:600;opacity:0;pointer-events:none;transition:.25s;z-index:20;max-width:90vw;text-align:center}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#toast.err{background:var(--bad)}
+.hide{display:none}
+/* Mobile */
+@media (max-width:800px){
+  .side{inset:auto 0 0 0;width:auto;flex-direction:row;padding:8px 8px calc(8px + env(safe-area-inset-bottom));z-index:10;justify-content:space-around;gap:2px}
+  .brand{display:none}
+  .nav{flex:1;text-align:center;padding:11px 4px;font-size:13px}
+  main{margin-left:0;padding:18px 14px 100px}
+  .mtitle{display:block}
+  h1{font-size:20px}
+  .grid{grid-template-columns:1fr}
+  .big{font-size:26px}
+  .btn.ghost,.scanrow .btn{flex:1 1 100%}
+  #toast{bottom:84px}
+}
+.mtitle{display:none;font-weight:800;color:var(--teal);font-size:13px;margin-bottom:4px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="side" aria-label="Menu utama">
+    <div class="brand">Check-in MCU</div>
+    <button class="nav on" data-v="dash">Dashboard</button>
+    <button class="nav" data-v="cek">Scan</button>
+    <button class="nav" data-v="peserta">Peserta</button>
+    <button class="nav" data-v="barcode">Barcode</button>
+    <button class="nav out" id="btnOut">Keluar</button>
+  </nav>
+
+  <main>
+    <div class="mtitle">Check-in MCU</div>
+
+    <!-- Dashboard -->
+    <section id="v-dash">
+      <h1>Dashboard</h1>
+      <div class="card">
+        <div class="muted" style="font-size:13.5px">Kehadiran peserta</div>
+        <div class="sum"><span class="big" id="nHadir">0</span> dari <span id="nTotal">0</span> peserta sudah check in. <span id="nSisa">0</span> belum hadir.</div>
+        <div class="bar"><i id="bar"></i></div>
+        <div class="legend"><span class="l-ok">Hadir <b id="lHadir">0</b></span><span class="l-bad">Belum hadir <b id="lBelum">0</b></span></div>
+      </div>
+      <div class="grid">
+        <div class="card"><h3>Check in terbaru</h3><ul class="list" id="terbaru"></ul></div>
+        <div class="card"><h3>Progres pemeriksaan</h3><ul class="list" id="perGrup"></ul></div>
+      </div>
+    </section>
+
+    <!-- Check in -->
+    <section id="v-cek" class="hide">
+      <h1>Scan</h1>
+      <div class="card">
+        <div class="modes" id="modes" role="group" aria-label="Pilih pemeriksaan"></div>
+        <div class="scanrow">
+          <input type="text" id="kode" placeholder="Scan barcode atau ketik NIK" autocomplete="off" inputmode="text" aria-label="Kode barcode">
+          <button class="btn" id="btnCari">Cari</button>
+          <button class="btn ghost" id="btnCam">Scan dengan kamera</button>
+        </div>
+        <label class="auto"><input type="checkbox" id="auto"> Otomatis centang saat barcode terbaca</label>
+        <div id="reader"></div>
+      </div>
+      <div id="hasil"></div>
+    </section>
+
+    <!-- Peserta -->
+    <section id="v-peserta" class="hide">
+      <h1>Peserta</h1>
+      <div class="card">
+        <input type="text" id="q" placeholder="Cari nama atau NIK" aria-label="Cari peserta">
+        <div class="tw"><table><thead><tr><th>Nama</th><th>NIK</th><th>Status</th><th>Jam</th></tr></thead><tbody id="tbody"></tbody></table></div>
+      </div>
+    </section>
+    <!-- Barcode -->
+    <section id="v-barcode" class="hide">
+      <h1>Barcode</h1>
+      <div class="card noprint">
+        <div class="scanrow">
+          <input type="text" id="qb" placeholder="Cari nama atau NIK" aria-label="Cari barcode">
+          <button class="btn" id="btnPrint">Cetak</button>
+        </div>
+        <p class="muted" style="margin-top:10px;font-size:13px">Satu label per pekerja, barcode berisi NIK. Cetak lalu gunting per label.</p>
+      </div>
+      <div class="labels" id="labels"></div>
+    </section>
+  </main>
+</div>
+<div id="login" role="dialog" aria-label="Masuk">
+  <div class="lbox">
+    <h1 style="margin-bottom:6px">Check-in MCU</h1>
+    <p class="muted" style="margin-bottom:14px">Masukkan PIN petugas.</p>
+    <input type="password" id="pin" placeholder="PIN" autocomplete="current-password" style="width:100%;font:inherit;padding:13px 14px;border:1.5px solid var(--line);border-radius:12px">
+    <p id="pinErr" style="color:var(--bad);font-size:13px;min-height:18px;margin:8px 0"></p>
+    <button class="btn" id="btnMasuk" style="width:100%">Masuk</button>
+  </div>
+</div>
+<div id="toast" role="status"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const API_URL = https://script.google.com/macros/s/AKfycbxsr29zcHdjOXNtiquIdO16DD8fnh48zzPSleZF1c_iXJYEngcYgF5PHdMl5vwGahzh6A/exec;   // URL deploy Apps Script (berakhiran /exec)
+let PIN = ''; try{ PIN = localStorage.getItem('pin') || ''; }catch(e){}
+let DATA = [], current = null, scanner = null, busy = false, mode = 'CHECKIN';
+try{ mode = localStorage.getItem('mode') || 'CHECKIN'; }catch(e){}
+
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function toast(msg, err){ const t=$('toast'); t.textContent=msg; t.className='show'+(err?' err':''); clearTimeout(toast.t); toast.t=setTimeout(()=>t.className='',2600); }
+
+/* Navigasi */
+document.querySelectorAll('.nav[data-v]').forEach(b => b.onclick = () => show(b.dataset.v));
+function show(v){
+  document.querySelectorAll('.nav').forEach(b => b.classList.toggle('on', b.dataset.v===v));
+  ['dash','cek','peserta','barcode'].forEach(x => $('v-'+x).classList.toggle('hide', x!==v));
+  if(v!=='cek') stopCam();
+  if(v==='cek') $('kode').focus();
+  if(v!=='cek') load();
+}
+
+/* API */
+function call(action, payload){
+  if(API_URL.indexOf('http')!==0) return Promise.reject(new Error('API_URL belum diisi di index.html.'));
+  return fetch(API_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(Object.assign({action, token:PIN}, payload||{})) })
+    .catch(() => { throw new Error('Tidak bisa terhubung ke server. Cek internet dan URL Web App.'); })
+    .then(r => r.text())
+    .then(t => { try{ return JSON.parse(t); }catch(e){ throw new Error('Respons server tidak valid. Pastikan deploy Apps Script diset "Anyone".'); } })
+    .then(r => { if(r.auth===false){ logout(); throw new Error('PIN salah.'); } return r; });
+}
+function showLogin(msg){ $('login').style.display='flex'; $('pinErr').textContent=msg||''; $('pin').value=''; $('pin').focus(); }
+function logout(){ PIN=''; try{ localStorage.removeItem('pin'); }catch(e){} showLogin('PIN salah atau sudah diganti.'); }
+$('btnOut').onclick = () => { PIN=''; try{ localStorage.removeItem('pin'); }catch(e){} DATA=[]; $('hasil').innerHTML=''; showLogin(); };
+$('btnMasuk').onclick = () => {
+  const v = $('pin').value.trim(); if(!v) return;
+  PIN = v; $('btnMasuk').disabled = true;
+  call('ping').then(r => { if(!r.ok) throw new Error(r.pesan); try{ localStorage.setItem('pin', PIN); }catch(e){} $('login').style.display='none'; load(); })
+    .catch(e => { $('pinErr').textContent = e.message; })
+    .then(() => { $('btnMasuk').disabled = false; });
+};
+$('pin').addEventListener('keydown', e => { if(e.key==='Enter') $('btnMasuk').click(); });
+
+/* Data & render */
+function load(){
+  call('data').then(r => { if(!r.ok) throw new Error(r.pesan); DATA = r.data; renderDash(); renderTable(); renderBarcode(); renderModes(); })
+    .catch(e => toast(e.message, true));
+}
+function renderDash(){
+  const total = DATA.length, hadir = DATA.filter(d=>d.hadir).length;
+  $('nHadir').textContent=hadir; $('nTotal').textContent=total; $('nSisa').textContent=total-hadir;
+  $('lHadir').textContent=hadir; $('lBelum').textContent=total-hadir;
+  $('bar').style.width = total ? (hadir/total*100)+'%' : '0';
+  const recent = DATA.filter(d=>d.hadir && d.jam).slice(-8).reverse();
+  $('terbaru').innerHTML = recent.length ? recent.map(d=>`<li><span>${esc(d.nama)}</span><span class="muted">${esc(d.jam)}</span></li>`).join('') : '<li class="empty">Belum ada yang check in.</li>';
+  const st = {}; DATA.forEach(d => (d.stasiun||[]).forEach(x => { st[x.label]=st[x.label]||0; if(x.done) st[x.label]++; }));
+  $('perGrup').innerHTML = Object.keys(st).length ? Object.entries(st).map(([k,v])=>`<li><span>${esc(k)}</span><span class="muted">${v} / ${total}</span></li>`).join('') : '<li class="empty">Belum ada data pemeriksaan.</li>';
+}
+function renderTable(){
+  const q = $('q').value.trim().toLowerCase();
+  const rows = DATA.filter(d => !q || d.nama.toLowerCase().includes(q) || d.kode.toLowerCase().includes(q));
+  $('tbody').innerHTML = rows.length ? rows.map(d=>`<tr><td>${esc(d.nama)}</td><td>${esc(d.kode)}</td><td><span class="badge ${d.hadir?'b-ok':'b-bad'}" style="margin:0">${d.hadir?'Hadir':'Belum hadir'}</span></td><td class="muted">${esc(d.jam)||'-'}</td></tr>`).join('') : '<tr><td colspan="4" class="empty">Peserta tidak ditemukan.</td></tr>';
+}
+$('q').oninput = renderTable;
+
+/* Barcode */
+function renderBarcode(){
+  const q = $('qb').value.trim().toLowerCase();
+  const rows = DATA.filter(d => d.kode && (!q || d.nama.toLowerCase().includes(q) || d.kode.toLowerCase().includes(q)));
+  $('labels').innerHTML = rows.length ? rows.map((d,i)=>`<div class="lbl"><div class="ln">${esc(d.nama)}</div><svg id="bc${i}"></svg></div>`).join('') : '<div class="empty" style="margin-top:16px">Tidak ada data.</div>';
+  if(typeof JsBarcode==='undefined') return;
+  rows.forEach((d,i)=>{ try{ JsBarcode('#bc'+i, d.kode, {format:'CODE128', height:46, width:2, fontSize:14, margin:0}); }catch(e){} });
+}
+$('qb').oninput = renderBarcode;
+$('btnPrint').onclick = () => window.print();
+
+/* Cari & check in */
+function cari(kode){
+  kode = (kode||'').trim(); if(!kode || busy) return;
+  busy = true; $('hasil').innerHTML = '<div class="card muted">Mencari...</div>';
+  call('cari', {kode}).then(r => { busy=false; tampil(r); })
+    .catch(e => { busy=false; $('hasil').innerHTML=''; toast(e.message, true); });
+}
+function renderModes(){
+  const labs = ['CHECKIN'].concat(((DATA[0]||{}).stasiun||[]).map(x=>x.label));
+  if(labs.indexOf(mode)<0) mode='CHECKIN';
+  $('modes').innerHTML = labs.map(l=>`<button class="mode ${l===mode?'on':''}" data-m="${esc(l)}">${l==='CHECKIN'?'Check in':esc(l)}</button>`).join('');
+  $('modes').querySelectorAll('.mode').forEach(b => b.onclick = () => {
+    mode = b.dataset.m; try{ localStorage.setItem('mode', mode); }catch(e){}
+    renderModes(); $('hasil').innerHTML=''; $('kode').focus();
+  });
+}
+function tampil(r, noauto){
+  if(!r.ok){ $('hasil').innerHTML = `<div class="card"><span class="badge b-bad" style="margin:0">Tidak ditemukan</span><p style="margin-top:10px">${esc(r.pesan)}</p></div>`; if(navigator.vibrate) navigator.vibrate([200,80,200]); return; }
+  const p = r.pekerja; current = p.kode;
+  const st = mode==='CHECKIN' ? null : (p.stasiun||[]).find(x=>x.label===mode);
+  const done = mode==='CHECKIN' ? p.hadir : !!(st && st.done);
+  const nm = mode==='CHECKIN' ? 'check in' : mode;
+  const badge = done ? `<span class="badge b-warn">Sudah ${esc(nm)}${mode==='CHECKIN'&&p.jam?' pukul '+esc(p.jam):''}</span>` : `<span class="badge b-bad">Belum ${esc(nm)}</span>`;
+  const warnCI = (mode!=='CHECKIN' && !p.hadir) ? '<span class="badge b-bad" style="margin-left:8px">Belum check in</span>' : '';
+  $('hasil').innerHTML = `<div class="card">
+    <div class="who">${esc(p.nama)}</div>${badge}${warnCI}
+    <div class="det">${p.detail.map(d=>`<div><small>${esc(d.label)}</small><span>${esc(d.value)}</span></div>`).join('')}</div>
+    <div class="chips">${(p.stasiun||[]).map(x=>`<span class="chip ${x.done?'done':''}">${esc(x.label)}</span>`).join('')}</div>
+    <button class="btn go" id="btnGo" ${done?'disabled':''}>${done?'Sudah '+esc(nm):(mode==='CHECKIN'?'Check in':'Tandai '+esc(mode)+' selesai')}</button>
+    ${done && mode!=='CHECKIN' ? `<button class="btn ghost" id="btnUndo" style="width:100%;margin-top:10px">Batalkan ${esc(mode)}</button>` : ''}</div>`;
+  if(!done){ $('btnGo').onclick = () => doAksi(true); if(!noauto && $('auto').checked) doAksi(true); }
+  if($('btnUndo')) $('btnUndo').onclick = () => doAksi(false);
+}
+function doAksi(nilai){
+  if(busy) return; busy = true;
+  const b = $('btnGo'); if(b) b.disabled = true;
+  const req = mode==='CHECKIN' ? call('checkin', {kode:current}) : call('stasiun', {kode:current, stasiun:mode, nilai});
+  req.then(r => {
+    busy = false;
+    if(!r.ok){ toast(r.pesan, true); if(b) b.disabled=false; return; }
+    tampil({ok:true, pekerja:r.pekerja}, true);
+    if(nilai && r.sudahSebelumnya) toast('Sudah tercatat sebelumnya.', true);
+    else { toast((nilai?'Berhasil: ':'Dibatalkan: ')+r.pekerja.nama); if(navigator.vibrate) navigator.vibrate(120); }
+    $('kode').value=''; $('kode').focus();
+  }).catch(e => { busy=false; if(b) b.disabled=false; toast(e.message, true); });
+}
+$('btnCari').onclick = () => cari($('kode').value);
+$('kode').addEventListener('keydown', e => { if(e.key==='Enter'){ e.preventDefault(); cari($('kode').value); } });
+
+/* Kamera */
+$('btnCam').onclick = () => {
+  if(scanner){ stopCam(); return; }
+  $('reader').style.display='block';
+  scanner = new Html5Qrcode('reader');
+  scanner.start({facingMode:'environment'}, {fps:10, qrbox:{width:260,height:140}},
+    txt => { $('kode').value=txt; stopCam(); cari(txt); }, () => {})
+    .catch(() => { stopCam(); toast('Kamera tidak bisa dibuka. Gunakan scanner atau ketik kode.', true); });
+  $('btnCam').textContent='Tutup kamera';
+};
+function stopCam(){
+  $('btnCam').textContent='Scan dengan kamera';
+  if(scanner){ const s=scanner; scanner=null; s.stop().then(()=>s.clear()).catch(()=>{}); }
+  $('reader').style.display='none';
+}
+
+if(PIN) load(); else showLogin();
+</script>
+</body>
+</html>
