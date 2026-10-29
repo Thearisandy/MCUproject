@@ -201,8 +201,9 @@ th{font-size:12.5px;color:var(--muted);font-weight:600;border-top:0}
 
 <script>
 const $ = id => document.getElementById(id);
-const API_URL = 'https://script.google.com/macros/s/AKfycbxsr29zcHdjOXNtiquIdO16DD8fnh48zzPSleZF1c_iXJYEngcYgF5PHdMl5vwGahzh6A/exec';   // URL Spreadsheet jangan dirubah sheetnya pasin di deploynya
-try{ mode = localStorage.getItem('mode') || 'CHECKIN'; }catch(e){}
+const API_URL = 'https://script.google.com/macros/s/AKfycbxsr29zcHdjOXNtiquIdO16DD8fnh48zzPSleZF1c_iXJYEngcYgF5PHdMl5vwGahzh6A/exec';
+let PIN = ''; try{ PIN = localStorage.getItem('pin') || ''; }catch(e){}
+let DATA = [], current = null, scanner = null, busy = false, mode = 'CHECKIN';
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function toast(msg, err){ const t=$('toast'); t.textContent=msg; t.className='show'+(err?' err':''); clearTimeout(toast.t); toast.t=setTimeout(()=>t.className='',2600); }
