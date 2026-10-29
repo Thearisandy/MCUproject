@@ -15,7 +15,7 @@
 }
 *{box-sizing:border-box;margin:0}
 html,body{height:100%}
-body{font-family:'poppins',system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:15px;-webkit-tap-highlight-color:transparent}
+body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:15px;-webkit-tap-highlight-color:transparent}
 .app{display:flex;min-height:100%}
 /* Sidebar */
 .side{width:196px;background:var(--navy);padding:22px 6px;position:fixed;inset:0 auto 0 0;display:flex;flex-direction:column;gap:4px}
@@ -79,6 +79,10 @@ input[type=text]:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3p
 @media (max-width:800px){.nav.out{margin-top:0}}
 #rst{position:fixed;inset:0;background:rgba(13,32,56,.72);display:none;align-items:center;justify-content:center;z-index:40;padding:20px}
 .btn.bad{background:var(--bad)}.btn.bad:hover{background:#b0362f}
+.ttv{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+.ttv label{font-size:12.5px;color:var(--muted);font-weight:600}
+.ttv input{display:block;width:100%;font:inherit;font-size:22px;font-weight:700;color:var(--ink);padding:12px 14px;border:1.5px solid var(--line);border-radius:12px;margin-top:4px;background:#fff}
+.ttv input:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px rgba(14,124,134,.15)}
 /* Peserta */
 .tw{overflow-x:auto;margin-top:14px}
 table{width:100%;border-collapse:collapse;font-size:14px}
@@ -201,9 +205,11 @@ th{font-size:12.5px;color:var(--muted);font-weight:600;border-top:0}
 
 <script>
 const $ = id => document.getElementById(id);
-const API_URL = 'https://script.google.com/macros/s/AKfycbxsr29zcHdjOXNtiquIdO16DD8fnh48zzPSleZF1c_iXJYEngcYgF5PHdMl5vwGahzh6A/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbxsr29zcHdjOXNtiquIdO16DD8fnh48zzPSleZF1c_iXJYEngcYgF5PHdMl5vwGahzh6A/exec';   // URL deploy Apps Script (berakhiran /exec)
+const MODE_TTV = 'TTV';   // nama stasiun yang meminta input Sistol/Diastol (sama dengan nama di STASIUN)
 let PIN = ''; try{ PIN = localStorage.getItem('pin') || ''; }catch(e){}
 let DATA = [], current = null, scanner = null, busy = false, mode = 'CHECKIN';
+try{ mode = localStorage.getItem('mode') || 'CHECKIN'; }catch(e){}
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function toast(msg, err){ const t=$('toast'); t.textContent=msg; t.className='show'+(err?' err':''); clearTimeout(toast.t); toast.t=setTimeout(()=>t.className='',2600); }
@@ -295,6 +301,7 @@ function cari(kode){
 function renderModes(){
   const labs = ['CHECKIN'].concat(((DATA[0]||{}).stasiun||[]).map(x=>x.label));
   if(labs.indexOf(mode)<0) mode='CHECKIN';
+  document.querySelector('.auto').style.display = mode===MODE_TTV ? 'none' : 'flex';
   $('modes').innerHTML = labs.map(l=>`<button class="mode ${l===mode?'on':''}" data-m="${esc(l)}">${l==='CHECKIN'?'Check in':esc(l)}</button>`).join('');
   $('modes').querySelectorAll('.mode').forEach(b => b.onclick = () => {
     mode = b.dataset.m; try{ localStorage.setItem('mode', mode); }catch(e){}
@@ -309,14 +316,35 @@ function tampil(r, noauto){
   const nm = mode==='CHECKIN' ? 'check in' : mode;
   const badge = done ? `<span class="badge b-warn">Sudah ${esc(nm)}${mode==='CHECKIN'&&p.jam?' pukul '+esc(p.jam):''}</span>` : `<span class="badge b-bad">Belum ${esc(nm)}</span>`;
   const warnCI = (mode!=='CHECKIN' && !p.hadir) ? '<span class="badge b-bad" style="margin-left:8px">Belum check in</span>' : '';
+  const isTTV = mode===MODE_TTV, tv = p.ttv || {};
+  const btnHtml = `<button class="btn go" id="btnGo" ${done?'disabled':''}>${done?'Sudah '+esc(nm):(mode==='CHECKIN'?'Check in':'Tandai '+esc(mode)+' selesai')}</button>`;
+  const ttvHtml = `<div class="ttv"><label>Sistol (mmHg)<input type="number" inputmode="numeric" id="sis" min="40" max="300" value="${esc(tv.sistol)}"></label><label>Diastol (mmHg)<input type="number" inputmode="numeric" id="dia" min="20" max="200" value="${esc(tv.diastol)}"></label></div><button class="btn go" id="btnGo">${done?'Perbarui':'Send'}</button>`;
   $('hasil').innerHTML = `<div class="card">
     <div class="who">${esc(p.nama)}</div>${badge}${warnCI}
     <div class="det">${p.detail.map(d=>`<div><small>${esc(d.label)}</small><span>${esc(d.value)}</span></div>`).join('')}</div>
     <div class="chips">${(p.stasiun||[]).map(x=>`<span class="chip ${x.done?'done':''}">${esc(x.label)}</span>`).join('')}</div>
-    <button class="btn go" id="btnGo" ${done?'disabled':''}>${done?'Sudah '+esc(nm):(mode==='CHECKIN'?'Check in':'Tandai '+esc(mode)+' selesai')}</button>
+    ${isTTV ? ttvHtml : btnHtml}
     ${done && mode!=='CHECKIN' ? `<button class="btn ghost" id="btnUndo" style="width:100%;margin-top:10px">Batalkan ${esc(mode)}</button>` : ''}</div>`;
-  if(!done){ $('btnGo').onclick = () => doAksi(true); if(!noauto && $('auto').checked) doAksi(true); }
+  if(isTTV){
+    $('btnGo').onclick = doTTV;
+    ['sis','dia'].forEach(id => $(id).addEventListener('keydown', e => { if(e.key==='Enter'){ e.preventDefault(); doTTV(); } }));
+    if(!done) $('sis').focus();
+  } else if(!done){ $('btnGo').onclick = () => doAksi(true); if(!noauto && $('auto').checked) doAksi(true); }
   if($('btnUndo')) $('btnUndo').onclick = () => doAksi(false);
+}
+function doTTV(){
+  if(busy) return;
+  const sis = parseInt($('sis').value,10), dia = parseInt($('dia').value,10);
+  if(!(sis>=40 && sis<=300) || !(dia>=20 && dia<=200)){ toast('Isi Sistol (40-300) dan Diastol (20-200) dengan angka.', true); return; }
+  if(sis<=dia){ toast('Sistol harus lebih besar dari Diastol.', true); return; }
+  busy = true; const b = $('btnGo'); b.disabled = true; b.textContent = 'Menyimpan...';
+  call('ttv', {kode:current, sistol:sis, diastol:dia}).then(r => {
+    busy = false;
+    if(!r.ok){ toast(r.pesan, true); b.disabled=false; b.textContent='Send'; return; }
+    tampil({ok:true, pekerja:r.pekerja}, true);
+    toast('Tersimpan: '+r.pekerja.nama+' ('+sis+'/'+dia+')'); if(navigator.vibrate) navigator.vibrate(120);
+    $('kode').value=''; $('kode').focus();
+  }).catch(e => { busy=false; b.disabled=false; b.textContent='Send'; toast(e.message, true); });
 }
 function doAksi(nilai){
   if(busy) return; busy = true;
