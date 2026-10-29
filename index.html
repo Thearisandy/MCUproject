@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
 <meta charset="utf-8">
-<title>MCU PT OTSUKA</title>
+<title>Check-in MCU</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
@@ -15,7 +15,7 @@
 }
 *{box-sizing:border-box;margin:0}
 html,body{height:100%}
-body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:15px;-webkit-tap-highlight-color:transparent}
+body{font-family:'poppins',system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:15px;-webkit-tap-highlight-color:transparent}
 .app{display:flex;min-height:100%}
 /* Sidebar */
 .side{width:196px;background:var(--navy);padding:22px 6px;position:fixed;inset:0 auto 0 0;display:flex;flex-direction:column;gap:4px}
@@ -77,6 +77,8 @@ input[type=text]:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3p
 .lbox{background:#fff;border-radius:16px;padding:24px;width:100%;max-width:340px}
 .nav.out{margin-top:auto;color:#9fb0c6}
 @media (max-width:800px){.nav.out{margin-top:0}}
+#rst{position:fixed;inset:0;background:rgba(13,32,56,.72);display:none;align-items:center;justify-content:center;z-index:40;padding:20px}
+.btn.bad{background:var(--bad)}.btn.bad:hover{background:#b0362f}
 /* Peserta */
 .tw{overflow-x:auto;margin-top:14px}
 table{width:100%;border-collapse:collapse;font-size:14px}
@@ -107,7 +109,7 @@ th{font-size:12.5px;color:var(--muted);font-weight:600;border-top:0}
 <body>
 <div class="app">
   <nav class="side" aria-label="Menu utama">
-    <div class="brand">MCU PT. OTSUKA</div>
+    <div class="brand">Check-in MCU</div>
     <button class="nav on" data-v="dash">Dashboard</button>
     <button class="nav" data-v="cek">Scan</button>
     <button class="nav" data-v="peserta">Peserta</button>
@@ -116,7 +118,7 @@ th{font-size:12.5px;color:var(--muted);font-weight:600;border-top:0}
   </nav>
 
   <main>
-    <div class="mtitle">MCU PT</div>
+    <div class="mtitle">Check-in MCU</div>
 
     <!-- Dashboard -->
     <section id="v-dash">
@@ -130,6 +132,11 @@ th{font-size:12.5px;color:var(--muted);font-weight:600;border-top:0}
       <div class="grid">
         <div class="card"><h3>Check in terbaru</h3><ul class="list" id="terbaru"></ul></div>
         <div class="card"><h3>Progres pemeriksaan</h3><ul class="list" id="perGrup"></ul></div>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <h3>Reset data</h3>
+        <p class="muted" style="font-size:13.5px;margin-bottom:12px">Mengosongkan semua centang check in, pemeriksaan, dan jam. Data peserta (NIK, nama, dan lainnya) tidak dihapus.</p>
+        <button class="btn bad" id="btnReset">Reset semua data</button>
       </div>
     </section>
 
@@ -165,7 +172,7 @@ th{font-size:12.5px;color:var(--muted);font-weight:600;border-top:0}
           <input type="text" id="qb" placeholder="Cari nama atau NIK" aria-label="Cari barcode">
           <button class="btn" id="btnPrint">Cetak</button>
         </div>
-        <p class="muted" style="margin-top:10px;font-size:13px">Satu label per karyawan, barcode berisi NIK. Cetak lalu gunting per label.</p>
+        <p class="muted" style="margin-top:10px;font-size:13px">Satu label per pekerja, barcode berisi NIK. Cetak lalu gunting per label.</p>
       </div>
       <div class="labels" id="labels"></div>
     </section>
@@ -180,13 +187,21 @@ th{font-size:12.5px;color:var(--muted);font-weight:600;border-top:0}
     <button class="btn" id="btnMasuk" style="width:100%">Masuk</button>
   </div>
 </div>
+<div id="rst" role="dialog" aria-label="Reset data">
+  <div class="lbox">
+    <h1 style="margin-bottom:6px;font-size:19px">Reset semua data?</h1>
+    <p class="muted" style="margin-bottom:14px;font-size:13.5px">Semua centang CHECK IN, pemeriksaan, dan jam dikosongkan untuk SEMUA peserta. Salinan cadangan spreadsheet dibuat otomatis lebih dulu.</p>
+    <input type="password" id="pinReset" placeholder="PIN reset" autocomplete="off" style="width:100%;font:inherit;padding:13px 14px;border:1.5px solid var(--line);border-radius:12px;margin-bottom:10px">
+    <input type="text" id="konfirm" placeholder="Ketik RESET untuk konfirmasi" autocomplete="off" style="width:100%">
+    <p id="rstErr" style="color:var(--bad);font-size:13px;min-height:18px;margin:8px 0"></p>
+    <div style="display:flex;gap:10px"><button class="btn ghost" id="rstBatal" style="flex:1">Batal</button><button class="btn bad" id="rstGo" style="flex:1">Reset</button></div>
+  </div>
+</div>
 <div id="toast" role="status"></div>
 
 <script>
 const $ = id => document.getElementById(id);
-const API_URL = 'https://script.google.com/macros/s/AKfycbxsr29zcHdjOXNtiquIdO16DD8fnh48zzPSleZF1c_iXJYEngcYgF5PHdMl5vwGahzh6A/exec';  // URL spreadsheetnya
-let PIN = ''; try{ PIN = localStorage.getItem('pin') || ''; }catch(e){}
-let DATA = [], current = null, scanner = null, busy = false, mode = 'CHECKIN';
+const API_URL = 'https://script.google.com/macros/s/AKfycbxsr29zcHdjOXNtiquIdO16DD8fnh48zzPSleZF1c_iXJYEngcYgF5PHdMl5vwGahzh6A/exec';   // URL Spreadsheet jangan dirubah sheetnya pasin di deploynya
 try{ mode = localStorage.getItem('mode') || 'CHECKIN'; }catch(e){}
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -222,6 +237,19 @@ $('btnMasuk').onclick = () => {
     .then(() => { $('btnMasuk').disabled = false; });
 };
 $('pin').addEventListener('keydown', e => { if(e.key==='Enter') $('btnMasuk').click(); });
+
+/* Reset data */
+$('btnReset').onclick = () => { $('pinReset').value=''; $('konfirm').value=''; $('rstErr').textContent=''; $('rst').style.display='flex'; $('pinReset').focus(); };
+$('rstBatal').onclick = () => { $('rst').style.display='none'; };
+$('rstGo').onclick = () => {
+  if($('konfirm').value.trim()!=='RESET'){ $('rstErr').textContent='Ketik RESET (huruf besar) untuk konfirmasi.'; return; }
+  const pr = $('pinReset').value; if(!pr){ $('rstErr').textContent='Isi PIN reset.'; return; }
+  const b = $('rstGo'); b.disabled = true; b.textContent = 'Memproses...';
+  call('reset', {pinReset: pr})
+    .then(r => { if(!r.ok) throw new Error(r.pesan); $('rst').style.display='none'; toast('Reset selesai: '+r.jumlah+' peserta dikosongkan.'+(r.cadangan?' Cadangan dibuat.':'')); $('hasil').innerHTML=''; load(); })
+    .catch(e => { $('rstErr').textContent = e.message; })
+    .then(() => { b.disabled=false; b.textContent='Reset'; });
+};
 
 /* Data & render */
 function load(){
