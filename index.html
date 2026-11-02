@@ -29,6 +29,7 @@ main{margin-left:196px;flex:1;padding:28px 28px 40px;max-width:1100px}
 h1{font-size:22px;font-weight:800;margin-bottom:18px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px 22px}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+.grid .wide{grid-column:1/-1}
 .card h3{font-size:13.5px;font-weight:700;margin-bottom:12px}
 .muted{color:var(--muted)}
 .big{font-size:30px;font-weight:800}
@@ -65,7 +66,8 @@ input[type=text]:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3p
 .chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px}.chip{font-size:12.5px;font-weight:600;padding:5px 11px;border-radius:99px;background:var(--track);color:var(--muted)}.chip.done{background:#dcf3ec;color:var(--ok)}
 .labels{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;margin-top:16px}
 .lbl{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 12px;text-align:center;break-inside:avoid}
-.lbl .ln{font-weight:700;margin-bottom:8px;font-size:14px}
+.lbl .ln{font-weight:700;margin-bottom:4px;font-size:14px}
+.lbl .ld{color:var(--muted);font-size:12px;margin-bottom:8px;min-height:14px}
 .lbl svg{max-width:100%;height:auto}
 @media print{.side,.mtitle,#toast,.noprint,#v-barcode h1{display:none!important}main{margin:0;padding:0;max-width:none}body{background:#fff}.labels{margin-top:0;gap:8px}.lbl{border-radius:0;border-color:#888}}
 .modes{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
@@ -136,6 +138,7 @@ th{font-size:12.5px;color:var(--muted);font-weight:600;border-top:0}
       <div class="grid">
         <div class="card"><h3>Check in terbaru</h3><ul class="list" id="terbaru"></ul></div>
         <div class="card"><h3>Progres pemeriksaan</h3><ul class="list" id="perGrup"></ul></div>
+        <div class="card wide"><h3>Kehadiran per departemen</h3><ul class="list" id="perDept"></ul></div>
       </div>
       <div class="card" style="margin-top:16px">
         <h3>Reset data</h3>
@@ -164,8 +167,8 @@ th{font-size:12.5px;color:var(--muted);font-weight:600;border-top:0}
     <section id="v-peserta" class="hide">
       <h1>Peserta</h1>
       <div class="card">
-        <input type="text" id="q" placeholder="Cari nama atau NIK" aria-label="Cari peserta">
-        <div class="tw"><table><thead><tr><th>Nama</th><th>NIK</th><th>Status</th><th>Jam</th></tr></thead><tbody id="tbody"></tbody></table></div>
+        <input type="text" id="q" placeholder="Cari nama, NIK, atau departemen" aria-label="Cari peserta">
+        <div class="tw"><table><thead><tr><th>Nama</th><th>NIK</th><th>Departemen</th><th>Status</th><th>Jam</th></tr></thead><tbody id="tbody"></tbody></table></div>
       </div>
     </section>
     <!-- Barcode -->
@@ -173,7 +176,7 @@ th{font-size:12.5px;color:var(--muted);font-weight:600;border-top:0}
       <h1>Barcode</h1>
       <div class="card noprint">
         <div class="scanrow">
-          <input type="text" id="qb" placeholder="Cari nama atau NIK" aria-label="Cari barcode">
+          <input type="text" id="qb" placeholder="Cari nama, NIK, atau departemen" aria-label="Cari barcode">
           <button class="btn" id="btnPrint">Cetak</button>
         </div>
         <p class="muted" style="margin-top:10px;font-size:13px">Satu label per pekerja, barcode berisi NIK. Cetak lalu gunting per label.</p>
@@ -260,7 +263,7 @@ $('rstGo').onclick = () => {
 
 /* Data & render */
 function load(){
-  call('data').then(r => { if(!r.ok) throw new Error(r.pesan); DATA = r.data; renderDash(); renderTable(); renderBarcode(); renderModes(); })
+  call('data').then(r => { if(!r.ok) throw new Error(r.pesan); DATA = r.data; renderDash(); renderTable(); if(!$('v-barcode').classList.contains('hide')) renderBarcode(); renderModes(); })
     .catch(e => toast(e.message, true));
 }
 function renderDash(){
@@ -272,19 +275,23 @@ function renderDash(){
   $('terbaru').innerHTML = recent.length ? recent.map(d=>`<li><span>${esc(d.nama)}</span><span class="muted">${esc(d.jam)}</span></li>`).join('') : '<li class="empty">Belum ada yang check in.</li>';
   const st = {}; DATA.forEach(d => (d.stasiun||[]).forEach(x => { st[x.label]=st[x.label]||0; if(x.done) st[x.label]++; }));
   $('perGrup').innerHTML = Object.keys(st).length ? Object.entries(st).map(([k,v])=>`<li><span>${esc(k)}</span><span class="muted">${v} / ${total}</span></li>`).join('') : '<li class="empty">Belum ada data pemeriksaan.</li>';
+  const g = {}; DATA.forEach(d => { const k = d.grup || '-'; g[k] = g[k] || {h:0,t:0}; g[k].t++; if(d.hadir) g[k].h++; });
+  const ks = Object.keys(g).sort();
+  $('perDept').parentElement.classList.toggle('hide', ks.length===0 || (ks.length===1 && ks[0]==='-'));
+  $('perDept').innerHTML = ks.map(k => `<li><span>${esc(k)}</span><span class="muted">${g[k].h} / ${g[k].t}</span></li>`).join('');
 }
 function renderTable(){
   const q = $('q').value.trim().toLowerCase();
-  const rows = DATA.filter(d => !q || d.nama.toLowerCase().includes(q) || d.kode.toLowerCase().includes(q));
-  $('tbody').innerHTML = rows.length ? rows.map(d=>`<tr><td>${esc(d.nama)}</td><td>${esc(d.kode)}</td><td><span class="badge ${d.hadir?'b-ok':'b-bad'}" style="margin:0">${d.hadir?'Hadir':'Belum hadir'}</span></td><td class="muted">${esc(d.jam)||'-'}</td></tr>`).join('') : '<tr><td colspan="4" class="empty">Peserta tidak ditemukan.</td></tr>';
+  const rows = DATA.filter(d => !q || d.nama.toLowerCase().includes(q) || d.kode.toLowerCase().includes(q) || (d.grup||'').toLowerCase().includes(q));
+  $('tbody').innerHTML = rows.length ? rows.map(d=>`<tr><td>${esc(d.nama)}</td><td>${esc(d.kode)}</td><td>${esc(d.grup)}</td><td><span class="badge ${d.hadir?'b-ok':'b-bad'}" style="margin:0">${d.hadir?'Hadir':'Belum hadir'}</span></td><td class="muted">${esc(d.jam)||'-'}</td></tr>`).join('') : '<tr><td colspan="5" class="empty">Peserta tidak ditemukan.</td></tr>';
 }
 $('q').oninput = renderTable;
 
 /* Barcode */
 function renderBarcode(){
   const q = $('qb').value.trim().toLowerCase();
-  const rows = DATA.filter(d => d.kode && (!q || d.nama.toLowerCase().includes(q) || d.kode.toLowerCase().includes(q)));
-  $('labels').innerHTML = rows.length ? rows.map((d,i)=>`<div class="lbl"><div class="ln">${esc(d.nama)}</div><svg id="bc${i}"></svg></div>`).join('') : '<div class="empty" style="margin-top:16px">Tidak ada data.</div>';
+  const rows = DATA.filter(d => d.kode && (!q || d.nama.toLowerCase().includes(q) || d.kode.toLowerCase().includes(q) || (d.grup||'').toLowerCase().includes(q)));
+  $('labels').innerHTML = rows.length ? rows.map((d,i)=>`<div class="lbl"><div class="ln">${esc(d.nama)}</div><div class="ld">${esc(d.grup)}</div><svg id="bc${i}"></svg></div>`).join('') : '<div class="empty" style="margin-top:16px">Tidak ada data.</div>';
   if(typeof JsBarcode==='undefined') return;
   rows.forEach((d,i)=>{ try{ JsBarcode('#bc'+i, d.kode, {format:'CODE128', height:46, width:2, fontSize:14, margin:0}); }catch(e){} });
 }
