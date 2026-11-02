@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
 <meta charset="utf-8">
-<title>MCU PT. Otsuka Indonesia</title>
+<title>Check-in MCU</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
@@ -115,7 +115,7 @@ th{font-size:12.5px;color:var(--muted);font-weight:600;border-top:0}
 <body>
 <div class="app">
   <nav class="side" aria-label="Menu utama">
-    <div class="brand">MCU PT. Otsuka Indonesia</div>
+    <div class="brand">Check-in MCU</div>
     <button class="nav on" data-v="dash">Dashboard</button>
     <button class="nav" data-v="cek">Scan</button>
     <button class="nav" data-v="peserta">Peserta</button>
@@ -124,7 +124,7 @@ th{font-size:12.5px;color:var(--muted);font-weight:600;border-top:0}
   </nav>
 
   <main>
-    <div class="mtitle">MCU PT. Otsuka Indonesia</div>
+    <div class="mtitle">Check-in MCU</div>
 
     <!-- Dashboard -->
     <section id="v-dash">
@@ -167,7 +167,7 @@ th{font-size:12.5px;color:var(--muted);font-weight:600;border-top:0}
     <section id="v-peserta" class="hide">
       <h1>Peserta</h1>
       <div class="card">
-        <input type="text" id="q" placeholder="Cari nama, NIK, atau departemen" aria-label="Cari peserta">
+        <input type="text" id="q" placeholder="Cari nama, NIK, NIP, atau departemen" aria-label="Cari peserta">
         <div class="tw"><table><thead><tr><th>Nama</th><th>NIK</th><th>Departemen</th><th>Status</th><th>Jam</th></tr></thead><tbody id="tbody"></tbody></table></div>
       </div>
     </section>
@@ -176,7 +176,7 @@ th{font-size:12.5px;color:var(--muted);font-weight:600;border-top:0}
       <h1>Barcode</h1>
       <div class="card noprint">
         <div class="scanrow">
-          <input type="text" id="qb" placeholder="Cari nama, NIK, atau departemen" aria-label="Cari barcode">
+          <input type="text" id="qb" placeholder="Cari nama, NIK, NIP, atau departemen" aria-label="Cari barcode">
           <button class="btn" id="btnPrint">Cetak</button>
         </div>
         <p class="muted" style="margin-top:10px;font-size:13px">Satu label per pekerja, barcode berisi NIK. Cetak lalu gunting per label.</p>
@@ -187,7 +187,7 @@ th{font-size:12.5px;color:var(--muted);font-weight:600;border-top:0}
 </div>
 <div id="login" role="dialog" aria-label="Masuk">
   <div class="lbox">
-    <h1 style="margin-bottom:6px">MCU PT. Otsuka Indonesia</h1>
+    <h1 style="margin-bottom:6px">Check-in MCU</h1>
     <p class="muted" style="margin-bottom:14px">Masukkan PIN petugas.</p>
     <input type="password" id="pin" placeholder="PIN" autocomplete="current-password" style="width:100%;font:inherit;padding:13px 14px;border:1.5px solid var(--line);border-radius:12px">
     <p id="pinErr" style="color:var(--bad);font-size:13px;min-height:18px;margin:8px 0"></p>
@@ -282,7 +282,7 @@ function renderDash(){
 }
 function renderTable(){
   const q = $('q').value.trim().toLowerCase();
-  const rows = DATA.filter(d => !q || d.nama.toLowerCase().includes(q) || d.kode.toLowerCase().includes(q) || (d.grup||'').toLowerCase().includes(q));
+  const rows = DATA.filter(d => !q || d.nama.toLowerCase().includes(q) || d.kode.toLowerCase().includes(q) || (d.grup||'').toLowerCase().includes(q) || (d.nip||'').toLowerCase().includes(q));
   $('tbody').innerHTML = rows.length ? rows.map(d=>`<tr><td>${esc(d.nama)}</td><td>${esc(d.kode)}</td><td>${esc(d.grup)}</td><td><span class="badge ${d.hadir?'b-ok':'b-bad'}" style="margin:0">${d.hadir?'Hadir':'Belum hadir'}</span></td><td class="muted">${esc(d.jam)||'-'}</td></tr>`).join('') : '<tr><td colspan="5" class="empty">Peserta tidak ditemukan.</td></tr>';
 }
 $('q').oninput = renderTable;
@@ -290,8 +290,8 @@ $('q').oninput = renderTable;
 /* Barcode */
 function renderBarcode(){
   const q = $('qb').value.trim().toLowerCase();
-  const rows = DATA.filter(d => d.kode && (!q || d.nama.toLowerCase().includes(q) || d.kode.toLowerCase().includes(q) || (d.grup||'').toLowerCase().includes(q)));
-  $('labels').innerHTML = rows.length ? rows.map((d,i)=>`<div class="lbl"><div class="ln">${esc(d.nama)}</div><div class="ld">${esc(d.grup)}</div><svg id="bc${i}"></svg></div>`).join('') : '<div class="empty" style="margin-top:16px">Tidak ada data.</div>';
+  const rows = DATA.filter(d => d.kode && (!q || d.nama.toLowerCase().includes(q) || d.kode.toLowerCase().includes(q) || (d.grup||'').toLowerCase().includes(q) || (d.nip||'').toLowerCase().includes(q)));
+  $('labels').innerHTML = rows.length ? rows.map((d,i)=>`<div class="lbl"><div class="ln">${esc(d.nama)}</div><div class="ld">${esc([d.grup, d.nip ? 'NIP '+d.nip : ''].filter(Boolean).join(' · '))}</div><svg id="bc${i}"></svg></div>`).join('') : '<div class="empty" style="margin-top:16px">Tidak ada data.</div>';
   if(typeof JsBarcode==='undefined') return;
   rows.forEach((d,i)=>{ try{ JsBarcode('#bc'+i, d.kode, {format:'CODE128', height:46, width:2, fontSize:14, margin:0}); }catch(e){} });
 }
