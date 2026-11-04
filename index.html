@@ -7,6 +7,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
 :root{
   --navy:#0d2038; --navy-2:#16304f; --teal:#0e7c86; --teal-2:#128a96;
@@ -124,7 +126,7 @@ th{font-size:12.5px;color:var(--muted);font-weight:600;border-top:0}
   </nav>
 
   <main>
-    <div class="mtitle">PT OTSUKA INDONESIA</div>
+    <div class="mtitle">PT. OTSUKA INDONESIA</div>
 
     <!-- Dashboard -->
     <section id="v-dash">
@@ -177,9 +179,11 @@ th{font-size:12.5px;color:var(--muted);font-weight:600;border-top:0}
       <div class="card noprint">
         <div class="scanrow">
           <input type="text" id="qb" placeholder="Cari nama, NIK, NIP, atau departemen" aria-label="Cari barcode">
-          <button class="btn" id="btnPrint">Cetak</button>
+          <button class="btn" id="btnPdf">Unduh PDF</button>
+          <button class="btn ghost" id="btnPng">Unduh PNG (ZIP)</button>
+          <button class="btn ghost" id="btnPrint">Cetak</button>
         </div>
-        <p class="muted" style="margin-top:10px;font-size:13px">Satu label per pekerja, barcode berisi NIK. Cetak lalu gunting per label.</p>
+        <p class="muted" style="margin-top:10px;font-size:13px">Satu label per pekerja, barcode berisi NIK. Unduhan mengikuti hasil pencarian di atas (kosongkan pencarian untuk semua pekerja). PDF berisi 30 label per lembar A4, siap dicetak dan digunting.</p>
       </div>
       <div class="labels" id="labels"></div>
     </section>
@@ -187,7 +191,7 @@ th{font-size:12.5px;color:var(--muted);font-weight:600;border-top:0}
 </div>
 <div id="login" role="dialog" aria-label="Masuk">
   <div class="lbox">
-    <h1 style="margin-bottom:6px">PT. OTSUKA INDONESIA</h1>
+    <h1 style="margin-bottom:6px">PT OTSUKA INDONESIA</h1>
     <p class="muted" style="margin-bottom:14px">Masuk dengan akun Anda.</p>
     <input type="text" id="user" placeholder="Username" autocomplete="username" autocapitalize="none" style="width:100%;margin-bottom:10px">
     <input type="password" id="pin" placeholder="PIN" autocomplete="current-password" style="width:100%;font:inherit;padding:13px 14px;border:1.5px solid var(--line);border-radius:12px">
@@ -304,15 +308,93 @@ function renderTable(){
 $('q').oninput = renderTable;
 
 /* Barcode */
-function renderBarcode(){
+function barcodeRows(){
   const q = $('qb').value.trim().toLowerCase();
-  const rows = DATA.filter(d => d.kode && (!q || d.nama.toLowerCase().includes(q) || d.kode.toLowerCase().includes(q) || (d.grup||'').toLowerCase().includes(q) || (d.nip||'').toLowerCase().includes(q)));
+  return DATA.filter(d => d.kode && (!q || d.nama.toLowerCase().includes(q) || d.kode.toLowerCase().includes(q) || (d.grup||'').toLowerCase().includes(q) || (d.nip||'').toLowerCase().includes(q)));
+}
+function renderBarcode(){
+  const rows = barcodeRows();
   $('labels').innerHTML = rows.length ? rows.map((d,i)=>`<div class="lbl"><div class="ln">${esc(d.nama)}</div><div class="ld">${esc([d.grup, d.nip ? 'NIP '+d.nip : ''].filter(Boolean).join(' · '))}</div><svg id="bc${i}"></svg></div>`).join('') : '<div class="empty" style="margin-top:16px">Tidak ada data.</div>';
   if(typeof JsBarcode==='undefined') return;
   rows.forEach((d,i)=>{ try{ JsBarcode('#bc'+i, d.kode, {format:'CODE128', height:46, width:2, fontSize:14, margin:0}); }catch(e){} });
 }
 $('qb').oninput = renderBarcode;
 $('btnPrint').onclick = () => window.print();
+
+/* Unduh barcode (PDF / PNG-ZIP) */
+function infoLabel(d){ return [d.grup, d.nip ? 'NIP '+d.nip : ''].filter(Boolean).join(' · '); }
+function fitText(x, text, maxW, size, weight){
+  let sz = size;
+  x.font = weight+' '+sz+'px "Plus Jakarta Sans", Arial, sans-serif';
+  while(x.measureText(text).width > maxW && sz > 12){ sz -= 1; x.font = weight+' '+sz+'px "Plus Jakarta Sans", Arial, sans-serif'; }
+}
+function labelCanvas(d){
+  const W = 600, H = 250;
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const x = c.getContext('2d');
+  x.fillStyle = '#fff'; x.fillRect(0, 0, W, H);
+  x.textAlign = 'center'; x.textBaseline = 'alphabetic';
+  x.fillStyle = '#0d1b2e'; fitText(x, d.nama, W-40, 30, 700); x.fillText(d.nama, W/2, 42);
+  const info = infoLabel(d);
+  x.fillStyle = '#5f6c7e'; fitText(x, info, W-40, 20, 400); x.fillText(info, W/2, 70);
+  const b = document.createElement('canvas');
+  JsBarcode(b, d.kode, {format:'CODE128', height:90, width:3, fontSize:22, margin:10, displayValue:true, background:'#ffffff'});
+  const sc = Math.min(1, (W-40)/b.width, (H-84)/b.height);
+  const bw = b.width*sc, bh = b.height*sc;
+  x.drawImage(b, (W-bw)/2, 84, bw, bh);
+  return c;
+}
+function simpanBlob(blob, name){
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+const tick = () => new Promise(r => setTimeout(r, 0));
+async function unduhPDF(){
+  const rows = barcodeRows(); if(!rows.length){ toast('Tidak ada label untuk diunduh.', true); return; }
+  if(!window.jspdf || typeof JsBarcode==='undefined'){ toast('Library PDF belum termuat. Cek internet lalu muat ulang.', true); return; }
+  const b = $('btnPdf'), t0 = b.textContent; b.disabled = true;
+  try{
+    try{ await document.fonts.load('700 30px "Plus Jakarta Sans"'); }catch(e){}
+    const doc = new window.jspdf.jsPDF({unit:'mm', format:'a4'});
+    const cols = 3, per = 30, w = 63, h = 27.4, mx = 10.5, my = 11.5;
+    doc.setDrawColor(200);
+    for(let i=0; i<rows.length; i++){
+      const k = i % per;
+      if(i > 0 && k === 0) doc.addPage();
+      const cx = mx + (k % cols) * w, cy = my + Math.floor(k / cols) * h;
+      doc.addImage(labelCanvas(rows[i]).toDataURL('image/png'), 'PNG', cx+1, cy+1, w-2, h-2, undefined, 'FAST');
+      doc.rect(cx, cy, w, h);
+      if(i % 10 === 0){ b.textContent = 'Menyiapkan '+i+'/'+rows.length; await tick(); }
+    }
+    doc.save('barcode-mcu.pdf');
+    toast('PDF diunduh ('+rows.length+' label).');
+  }catch(e){ toast('Gagal membuat PDF: '+e.message, true); }
+  b.textContent = t0; b.disabled = false;
+}
+async function unduhPNG(){
+  const rows = barcodeRows(); if(!rows.length){ toast('Tidak ada label untuk diunduh.', true); return; }
+  if(!window.JSZip || typeof JsBarcode==='undefined'){ toast('Library ZIP belum termuat. Cek internet lalu muat ulang.', true); return; }
+  const b = $('btnPng'), t0 = b.textContent; b.disabled = true;
+  try{
+    try{ await document.fonts.load('700 30px "Plus Jakarta Sans"'); }catch(e){}
+    const zip = new JSZip(), used = {};
+    for(let i=0; i<rows.length; i++){
+      const d = rows[i];
+      let nm = (d.nama.replace(/[^A-Za-z0-9]+/g,'_').replace(/^_+|_+$/g,'') || 'label') + '_' + d.kode.replace(/[^A-Za-z0-9]+/g,'');
+      used[nm] = (used[nm]||0) + 1; if(used[nm] > 1) nm += '_' + used[nm];
+      const blob = await new Promise(r => labelCanvas(d).toBlob(r, 'image/png'));
+      zip.file(nm + '.png', blob);
+      if(i % 10 === 0){ b.textContent = 'Menyiapkan '+i+'/'+rows.length; await tick(); }
+    }
+    b.textContent = 'Membuat ZIP...'; await tick();
+    simpanBlob(await zip.generateAsync({type:'blob'}), 'barcode-mcu.zip');
+    toast('ZIP diunduh ('+rows.length+' label).');
+  }catch(e){ toast('Gagal membuat ZIP: '+e.message, true); }
+  b.textContent = t0; b.disabled = false;
+}
+$('btnPdf').onclick = unduhPDF;
+$('btnPng').onclick = unduhPNG;
+
 
 /* Cari & check in */
 function cari(kode){
