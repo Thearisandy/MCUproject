@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
 <meta charset="utf-8">
-<title>Check-in MCU</title>
+<title>PT. OTSUKA INDONESIA</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
@@ -115,7 +115,7 @@ th{font-size:12.5px;color:var(--muted);font-weight:600;border-top:0}
 <body>
 <div class="app">
   <nav class="side" aria-label="Menu utama">
-    <div class="brand">Check-in MCU</div>
+    <div class="brand">PT. OTSUKA INDONESIA</div>
     <button class="nav on" data-v="dash">Dashboard</button>
     <button class="nav" data-v="cek">Scan</button>
     <button class="nav" data-v="peserta">Peserta</button>
@@ -124,7 +124,7 @@ th{font-size:12.5px;color:var(--muted);font-weight:600;border-top:0}
   </nav>
 
   <main>
-    <div class="mtitle">Check-in MCU</div>
+    <div class="mtitle">PT OTSUKA INDONESIA</div>
 
     <!-- Dashboard -->
     <section id="v-dash">
@@ -187,8 +187,9 @@ th{font-size:12.5px;color:var(--muted);font-weight:600;border-top:0}
 </div>
 <div id="login" role="dialog" aria-label="Masuk">
   <div class="lbox">
-    <h1 style="margin-bottom:6px">Check-in MCU</h1>
-    <p class="muted" style="margin-bottom:14px">Masukkan PIN petugas.</p>
+    <h1 style="margin-bottom:6px">PT. OTSUKA INDONESIA</h1>
+    <p class="muted" style="margin-bottom:14px">Masuk dengan akun Anda.</p>
+    <input type="text" id="user" placeholder="Username" autocomplete="username" autocapitalize="none" style="width:100%;margin-bottom:10px">
     <input type="password" id="pin" placeholder="PIN" autocomplete="current-password" style="width:100%;font:inherit;padding:13px 14px;border:1.5px solid var(--line);border-radius:12px">
     <p id="pinErr" style="color:var(--bad);font-size:13px;min-height:18px;margin:8px 0"></p>
     <button class="btn" id="btnMasuk" style="width:100%">Masuk</button>
@@ -210,7 +211,7 @@ th{font-size:12.5px;color:var(--muted);font-weight:600;border-top:0}
 const $ = id => document.getElementById(id);
 const API_URL = 'https://script.google.com/macros/s/AKfycbxsr29zcHdjOXNtiquIdO16DD8fnh48zzPSleZF1c_iXJYEngcYgF5PHdMl5vwGahzh6A/exec';   // URL deploy Apps Script (berakhiran /exec)
 const MODE_TTV = 'TTV';   // nama stasiun yang meminta input Sistol/Diastol (sama dengan nama di STASIUN)
-let PIN = ''; try{ PIN = localStorage.getItem('pin') || ''; }catch(e){}
+let PIN = '', USER = '', ROLE = ''; try{ PIN = localStorage.getItem('pin') || ''; USER = localStorage.getItem('user') || ''; }catch(e){}
 let DATA = [], current = null, scanner = null, busy = false, mode = 'CHECKIN';
 try{ mode = localStorage.getItem('mode') || 'CHECKIN'; }catch(e){}
 
@@ -220,6 +221,7 @@ function toast(msg, err){ const t=$('toast'); t.textContent=msg; t.className='sh
 /* Navigasi */
 document.querySelectorAll('.nav[data-v]').forEach(b => b.onclick = () => show(b.dataset.v));
 function show(v){
+  if(ROLE!=='petugas' && (v==='cek' || v==='barcode')) v = 'dash';
   document.querySelectorAll('.nav').forEach(b => b.classList.toggle('on', b.dataset.v===v));
   ['dash','cek','peserta','barcode'].forEach(x => $('v-'+x).classList.toggle('hide', x!==v));
   if(v!=='cek') stopCam();
@@ -230,23 +232,37 @@ function show(v){
 /* API */
 function call(action, payload){
   if(API_URL.indexOf('http')!==0) return Promise.reject(new Error('API_URL belum diisi di index.html.'));
-  return fetch(API_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(Object.assign({action, token:PIN}, payload||{})) })
+  return fetch(API_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(Object.assign({action, user:USER, token:PIN}, payload||{})) })
     .catch(() => { throw new Error('Tidak bisa terhubung ke server. Cek internet dan URL Web App.'); })
     .then(r => r.text())
     .then(t => { try{ return JSON.parse(t); }catch(e){ throw new Error('Respons server tidak valid. Pastikan deploy Apps Script diset "Anyone".'); } })
-    .then(r => { if(r.auth===false){ logout(); throw new Error('PIN salah.'); } return r; });
+    .then(r => { if(r.auth===false){ logout(r.pesan); throw new Error(r.pesan || 'Username atau PIN salah.'); } return r; });
 }
-function showLogin(msg){ $('login').style.display='flex'; $('pinErr').textContent=msg||''; $('pin').value=''; $('pin').focus(); }
-function logout(){ PIN=''; try{ localStorage.removeItem('pin'); }catch(e){} showLogin('PIN salah atau sudah diganti.'); }
-$('btnOut').onclick = () => { PIN=''; try{ localStorage.removeItem('pin'); }catch(e){} DATA=[]; $('hasil').innerHTML=''; showLogin(); };
+function showLogin(msg){ $('login').style.display='flex'; $('pinErr').textContent=msg||''; $('user').value=USER; $('pin').value=''; ($('user').value ? $('pin') : $('user')).focus(); }
+function clearSession(){ PIN=''; ROLE=''; try{ localStorage.removeItem('pin'); }catch(e){} }
+function logout(msg){ clearSession(); showLogin(msg || 'Username atau PIN salah.'); }
+$('btnOut').onclick = () => { clearSession(); DATA=[]; $('hasil').innerHTML=''; showLogin(); };
+function applyRole(){
+  const p = ROLE==='petugas';
+  document.querySelectorAll('.nav[data-v]').forEach(b => { b.style.display = (p || b.dataset.v==='dash' || b.dataset.v==='peserta') ? '' : 'none'; });
+  $('btnReset').parentElement.style.display = p ? '' : 'none';
+  $('btnOut').textContent = 'Keluar' + (USER ? ' ('+USER+')' : '');
+}
+function boot(){
+  return call('ping').then(r => {
+    if(!r.ok) throw new Error(r.pesan);
+    ROLE = r.role || 'lihat'; USER = r.user || USER; applyRole();
+    $('login').style.display='none'; show('dash');
+  });
+}
 $('btnMasuk').onclick = () => {
-  const v = $('pin').value.trim(); if(!v) return;
-  PIN = v; $('btnMasuk').disabled = true;
-  call('ping').then(r => { if(!r.ok) throw new Error(r.pesan); try{ localStorage.setItem('pin', PIN); }catch(e){} $('login').style.display='none'; load(); })
+  const u = $('user').value.trim(), v = $('pin').value.trim(); if(!v) return;
+  USER = u; PIN = v; $('btnMasuk').disabled = true;
+  boot().then(() => { try{ localStorage.setItem('pin', PIN); localStorage.setItem('user', USER); }catch(e){} })
     .catch(e => { $('pinErr').textContent = e.message; })
     .then(() => { $('btnMasuk').disabled = false; });
 };
-$('pin').addEventListener('keydown', e => { if(e.key==='Enter') $('btnMasuk').click(); });
+['pin','user'].forEach(id => $(id).addEventListener('keydown', e => { if(e.key==='Enter') $('btnMasuk').click(); }));
 
 /* Reset data */
 $('btnReset').onclick = () => { $('pinReset').value=''; $('konfirm').value=''; $('rstErr').textContent=''; $('rst').style.display='flex'; $('pinReset').focus(); };
@@ -385,7 +401,7 @@ function stopCam(){
   $('reader').style.display='none';
 }
 
-if(PIN) load(); else showLogin();
+if(PIN) boot().catch(e => toast(e.message, true)); else showLogin();
 </script>
 </body>
 </html>
