@@ -83,10 +83,20 @@ input[type=text]:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3p
 @media (max-width:800px){.nav.out{margin-top:0}}
 #rst{position:fixed;inset:0;background:rgba(13,32,56,.72);display:none;align-items:center;justify-content:center;z-index:40;padding:20px}
 .btn.bad{background:var(--bad)}.btn.bad:hover{background:#b0362f}
-.ttv{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
-.ttv label{font-size:12.5px;color:var(--muted);font-weight:600}
-.ttv input{display:block;width:100%;font:inherit;font-size:22px;font-weight:700;color:var(--ink);padding:12px 14px;border:1.5px solid var(--line);border-radius:12px;margin-top:4px;background:#fff}
-.ttv input:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px rgba(14,124,134,.15)}
+.frm{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+.fld.full{grid-column:1/-1}.fld.hid{display:none}
+.fld>label{display:block;font-size:12.5px;color:var(--muted);font-weight:600;margin-bottom:4px}
+.fld .un{font-weight:500}
+.fld input[type=text],.fld input[type=number],.fld select,.fld textarea,.ms>summary{display:block;width:100%;font:inherit;font-size:16px;color:var(--ink);padding:11px 13px;border:1.5px solid var(--line);border-radius:12px;background:#fff}
+.fld textarea{resize:vertical}
+.fld input:focus,.fld select:focus,.fld textarea:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px rgba(14,124,134,.15)}
+.ms>summary{cursor:pointer;list-style:none}
+.ms>summary::after{content:"▾";float:right;color:var(--muted)}
+.ms[open]>summary{border-color:var(--teal)}
+.mo{border:1.5px solid var(--line);border-radius:12px;margin-top:6px;padding:4px 12px;background:#fff}
+.mo label{display:flex;align-items:center;gap:10px;padding:9px 0;font-size:15px;cursor:pointer}
+.mo input{width:18px;height:18px;accent-color:var(--teal)}
+@media (max-width:800px){.frm{grid-template-columns:1fr}}
 /* Peserta */
 .tw{overflow-x:auto;margin-top:14px}
 table{width:100%;border-collapse:collapse;font-size:14px}
@@ -126,7 +136,7 @@ th{font-size:12.5px;color:var(--muted);font-weight:600;border-top:0}
   </nav>
 
   <main>
-    <div class="mtitle">PT. OTSUKA INDONESIA</div>
+    <div class="mtitle">Check-in MCU</div>
 
     <!-- Dashboard -->
     <section id="v-dash">
@@ -191,7 +201,7 @@ th{font-size:12.5px;color:var(--muted);font-weight:600;border-top:0}
 </div>
 <div id="login" role="dialog" aria-label="Masuk">
   <div class="lbox">
-    <h1 style="margin-bottom:6px">PT OTSUKA INDONESIA</h1>
+    <h1 style="margin-bottom:6px">Check-in MCU</h1>
     <p class="muted" style="margin-bottom:14px">Masuk dengan akun Anda.</p>
     <input type="text" id="user" placeholder="Username" autocomplete="username" autocapitalize="none" style="width:100%;margin-bottom:10px">
     <input type="password" id="pin" placeholder="PIN" autocomplete="current-password" style="width:100%;font:inherit;padding:13px 14px;border:1.5px solid var(--line);border-radius:12px">
@@ -214,8 +224,7 @@ th{font-size:12.5px;color:var(--muted);font-weight:600;border-top:0}
 <script>
 const $ = id => document.getElementById(id);
 const API_URL = 'https://script.google.com/macros/s/AKfycbxsr29zcHdjOXNtiquIdO16DD8fnh48zzPSleZF1c_iXJYEngcYgF5PHdMl5vwGahzh6A/exec';   // URL deploy Apps Script (berakhiran /exec)
-const MODE_TTV = 'TTV';   // nama stasiun yang meminta input Sistol/Diastol (sama dengan nama di STASIUN)
-let PIN = '', USER = '', ROLE = ''; try{ PIN = localStorage.getItem('pin') || ''; USER = localStorage.getItem('user') || ''; }catch(e){}
+let PIN = '', USER = '', ROLE = '', SCHEMA = {}; try{ PIN = localStorage.getItem('pin') || ''; USER = localStorage.getItem('user') || ''; }catch(e){}
 let DATA = [], current = null, scanner = null, busy = false, mode = 'CHECKIN';
 try{ mode = localStorage.getItem('mode') || 'CHECKIN'; }catch(e){}
 
@@ -255,7 +264,7 @@ function applyRole(){
 function boot(){
   return call('ping').then(r => {
     if(!r.ok) throw new Error(r.pesan);
-    ROLE = r.role || 'lihat'; USER = r.user || USER; applyRole();
+    ROLE = r.role || 'lihat'; SCHEMA = r.forms || {}; USER = r.user || USER; applyRole();
     $('login').style.display='none'; show('dash');
   });
 }
@@ -406,7 +415,7 @@ function cari(kode){
 function renderModes(){
   const labs = ['CHECKIN'].concat(((DATA[0]||{}).stasiun||[]).map(x=>x.label));
   if(labs.indexOf(mode)<0) mode='CHECKIN';
-  document.querySelector('.auto').style.display = mode===MODE_TTV ? 'none' : 'flex';
+  document.querySelector('.auto').style.display = (SCHEMA[mode] && mode!=='CHECKIN') ? 'none' : 'flex';
   $('modes').innerHTML = labs.map(l=>`<button class="mode ${l===mode?'on':''}" data-m="${esc(l)}">${l==='CHECKIN'?'Check in':esc(l)}</button>`).join('');
   $('modes').querySelectorAll('.mode').forEach(b => b.onclick = () => {
     mode = b.dataset.m; try{ localStorage.setItem('mode', mode); }catch(e){}
@@ -421,33 +430,57 @@ function tampil(r, noauto){
   const nm = mode==='CHECKIN' ? 'check in' : mode;
   const badge = done ? `<span class="badge b-warn">Sudah ${esc(nm)}${mode==='CHECKIN'&&p.jam?' pukul '+esc(p.jam):''}</span>` : `<span class="badge b-bad">Belum ${esc(nm)}</span>`;
   const warnCI = (mode!=='CHECKIN' && !p.hadir) ? '<span class="badge b-bad" style="margin-left:8px">Belum check in</span>' : '';
-  const isTTV = mode===MODE_TTV, tv = p.ttv || {};
+  const fields = SCHEMA[mode], isForm = !!fields && mode!=='CHECKIN';
   const btnHtml = `<button class="btn go" id="btnGo" ${done?'disabled':''}>${done?'Sudah '+esc(nm):(mode==='CHECKIN'?'Check in':'Tandai '+esc(mode)+' selesai')}</button>`;
-  const ttvHtml = `<div class="ttv"><label>Sistol (mmHg)<input type="number" inputmode="numeric" id="sis" min="40" max="300" value="${esc(tv.sistol)}"></label><label>Diastol (mmHg)<input type="number" inputmode="numeric" id="dia" min="20" max="200" value="${esc(tv.diastol)}"></label></div><button class="btn go" id="btnGo">${done?'Perbarui':'Send'}</button>`;
+  const formStr = isForm ? formHtml(fields, p.form) + `<button class="btn go" id="btnGo">${done?'Perbarui':'Send'}</button>` : '';
   $('hasil').innerHTML = `<div class="card">
     <div class="who">${esc(p.nama)}</div>${badge}${warnCI}
     <div class="det">${p.detail.map(d=>`<div><small>${esc(d.label)}</small><span>${esc(d.value)}</span></div>`).join('')}</div>
     <div class="chips">${(p.stasiun||[]).map(x=>`<span class="chip ${x.done?'done':''}">${esc(x.label)}</span>`).join('')}</div>
-    ${isTTV ? ttvHtml : btnHtml}
+    ${isForm ? formStr : btnHtml}
     ${done && mode!=='CHECKIN' ? `<button class="btn ghost" id="btnUndo" style="width:100%;margin-top:10px">Batalkan ${esc(mode)}</button>` : ''}</div>`;
-  if(isTTV){
-    $('btnGo').onclick = doTTV;
-    ['sis','dia'].forEach(id => $(id).addEventListener('keydown', e => { if(e.key==='Enter'){ e.preventDefault(); doTTV(); } }));
-    if(!done) $('sis').focus();
+  if(isForm){
+    $('btnGo').onclick = doForm; bindForm(fields);
+    const f0 = fields[0]; if(!done && (f0.t==='text' || f0.t==='number')) $(fidv(f0.k)).focus();
   } else if(!done){ $('btnGo').onclick = () => doAksi(true); if(!noauto && $('auto').checked) doAksi(true); }
   if($('btnUndo')) $('btnUndo').onclick = () => doAksi(false);
 }
-function doTTV(){
-  if(busy) return;
-  const sis = parseInt($('sis').value,10), dia = parseInt($('dia').value,10);
-  if(!(sis>=40 && sis<=300) || !(dia>=20 && dia<=200)){ toast('Isi Sistol (40-300) dan Diastol (20-200) dengan angka.', true); return; }
-  if(sis<=dia){ toast('Sistol harus lebih besar dari Diastol.', true); return; }
+const fidv = k => 'f_'+k;
+function fieldHtml(f, val){
+  const id = fidv(f.k), lab = esc(f.l) + (f.u ? ' <span class="un">('+esc(f.u)+')</span>' : '');
+  let ctl;
+  if(f.t==='select') ctl = `<select id="${id}"><option value="">- pilih -</option>${f.o.map(o=>`<option ${o===val?'selected':''}>${esc(o)}</option>`).join('')}</select>`;
+  else if(f.t==='multi'){ const sel = val ? val.split(/\s*,\s*/) : []; ctl = `<details class="ms" id="${id}"><summary>${sel.length?esc(sel.join(', ')):'Pilih...'}</summary><div class="mo">${f.o.map(o=>`<label><input type="checkbox" value="${esc(o)}" ${sel.indexOf(o)>=0?'checked':''}> ${esc(o)}</label>`).join('')}</div></details>`; }
+  else if(f.t==='area') ctl = `<textarea id="${id}" rows="2">${esc(val)}</textarea>`;
+  else if(f.t==='number') ctl = `<input type="number" inputmode="decimal" step="any" id="${id}" value="${esc(val)}"${f.min!=null?' min="'+f.min+'"':''}${f.max!=null?' max="'+f.max+'"':''}>`;
+  else ctl = `<input type="text" id="${id}" value="${esc(val)}"${f.im?' inputmode="'+f.im+'"':''} autocomplete="off">`;
+  const full = f.w || f.t==='area' || f.t==='multi';
+  return `<div class="fld${full?' full':''}" data-k="${f.k}"><label for="${id}">${lab}</label>${ctl}</div>`;
+}
+function formHtml(fields, form){ form = form || {}; return '<div class="frm" id="frm">' + fields.map(f => fieldHtml(f, form[f.k] || '')).join('') + '</div>'; }
+function getVal(f){ const el = $(fidv(f.k)); if(!el) return ''; return f.t==='multi' ? [...el.querySelectorAll('input:checked')].map(i=>i.value).join(', ') : el.value.trim(); }
+const fldEl = f => document.querySelector('.fld[data-k="'+f.k+'"]');
+function visible(f){ const e = fldEl(f); return !!e && !e.classList.contains('hid'); }
+function bindForm(fields){
+  const fr = $('frm');
+  const upd = () => {
+    fields.forEach(f => { if(f.showIf){ const src = fields.find(x => x.k===f.showIf.k); fldEl(f).classList.toggle('hid', f.showIf.v.indexOf(getVal(src)) < 0); } });
+    fields.filter(f => f.t==='multi').forEach(f => { $(fidv(f.k)).querySelector('summary').textContent = getVal(f) || 'Pilih...'; });
+  };
+  fr.addEventListener('input', upd); fr.addEventListener('change', upd); upd();
+  fr.querySelectorAll('input[type=text],input[type=number]').forEach(i => i.addEventListener('keydown', e => { if(e.key==='Enter'){ e.preventDefault(); doForm(); } }));
+}
+function doForm(){
+  if(busy) return; const fields = SCHEMA[mode]; if(!fields) return;
+  const vals = {}; let miss = null;
+  fields.forEach(f => { if(!visible(f)){ vals[f.k] = ''; return; } vals[f.k] = getVal(f); if(f.req && !vals[f.k] && !miss) miss = f; });
+  if(miss){ toast('Isi '+miss.l+'.', true); return; }
   busy = true; const b = $('btnGo'); b.disabled = true; b.textContent = 'Menyimpan...';
-  call('ttv', {kode:current, sistol:sis, diastol:dia}).then(r => {
+  call('form', {kode:current, stasiun:mode, values:vals}).then(r => {
     busy = false;
     if(!r.ok){ toast(r.pesan, true); b.disabled=false; b.textContent='Send'; return; }
     tampil({ok:true, pekerja:r.pekerja}, true);
-    toast('Tersimpan: '+r.pekerja.nama+' ('+sis+'/'+dia+')'); if(navigator.vibrate) navigator.vibrate(120);
+    toast('Tersimpan: '+r.pekerja.nama+' ('+mode+')'); if(navigator.vibrate) navigator.vibrate(120);
     $('kode').value=''; $('kode').focus();
   }).catch(e => { busy=false; b.disabled=false; b.textContent='Send'; toast(e.message, true); });
 }
