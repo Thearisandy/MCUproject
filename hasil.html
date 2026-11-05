@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Unduh Hasil MCU</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="config.js"></script>
+<style>
+:root{--navy:#0d2038;--teal:#0e7c86;--teal2:#128a96;--bg:#f3f4f6;--line:#e3e7ed;--ink:#0d1b2e;--muted:#5f6c7e;--ok:#14866d;--bad:#c9403a}
+*{box-sizing:border-box;margin:0}
+body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--navy);color:var(--ink);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.card{background:#fff;border-radius:18px;padding:26px 24px;width:100%;max-width:400px}
+h1{font-size:21px;font-weight:800;margin-bottom:6px}
+p.sub{color:var(--muted);font-size:14px;margin-bottom:18px;line-height:1.5}
+label{display:block;font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:4px}
+input{display:block;width:100%;font:inherit;font-size:17px;padding:13px 14px;border:1.5px solid var(--line);border-radius:12px;margin-bottom:14px;background:#fff;color:var(--ink)}
+input:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px rgba(14,124,134,.15)}
+#kode{text-transform:uppercase;letter-spacing:2px}
+button{font:inherit;font-weight:700;font-size:16px;width:100%;border:0;border-radius:12px;padding:15px;background:var(--teal);color:#fff;cursor:pointer}
+button:hover{background:var(--teal2)}button:disabled{background:#b9c2cf;cursor:not-allowed}
+button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid #7fd3da;outline-offset:2px}
+#msg{min-height:20px;margin-top:14px;font-size:14px;font-weight:600;text-align:center;line-height:1.5}
+#msg.err{color:var(--bad)}#msg.ok{color:var(--ok)}
+#msg a{color:var(--teal)}
+.note{margin-top:16px;font-size:12px;color:var(--muted);text-align:center;line-height:1.5}
+</style>
+</head>
+<body>
+<main class="card">
+  <h1>Unduh Hasil MCU</h1>
+  <p class="sub">Masukkan NIK dan kode unduh pribadi Anda. Kode unduh diberikan oleh petugas saat pendaftaran.</p>
+  <label for="nik">NIK</label>
+  <input id="nik" inputmode="numeric" autocomplete="off" placeholder="16 digit NIK">
+  <label for="kode">Kode unduh</label>
+  <input id="kode" autocomplete="off" autocapitalize="characters" placeholder="Contoh: AB3K7M">
+  <button id="go">Unduh PDF</button>
+  <div id="msg" role="status"></div>
+  <p class="note">Hasil ini bersifat pribadi. Jangan bagikan kode unduh Anda kepada orang lain.</p>
+</main>
+<script>
+const API_URL = (window.APP_CONFIG && window.APP_CONFIG.API_URL) || 'GANTI_DENGAN_URL_WEB_APP';
+const $ = id => document.getElementById(id);
+function say(t, cls){ const m = $('msg'); m.className = cls || ''; m.textContent = t; return m; }
+function toBlob(b64){ const bin = atob(b64), a = new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) a[i] = bin.charCodeAt(i); return new Blob([a], {type:'application/pdf'}); }
+async function unduh(){
+  const nik = $('nik').value.trim(), kode = $('kode').value.trim();
+  if(!nik || !kode){ say('Isi NIK dan kode unduh.', 'err'); return; }
+  if(API_URL.indexOf('http') !== 0){ say('Halaman belum dikonfigurasi (config.js).', 'err'); return; }
+  const b = $('go'); b.disabled = true; b.textContent = 'Memeriksa...'; say('');
+  try{
+    const res = await fetch(API_URL, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({action:'hasil_peserta', nik, kode})});
+    let r; try{ r = JSON.parse(await res.text()); }catch(e){ throw new Error('Layanan tidak merespons dengan benar. Coba lagi nanti.'); }
+    if(!r.ok) throw new Error(r.pesan || 'Gagal mengunduh.');
+    const url = URL.createObjectURL(toBlob(r.data));
+    const a = document.createElement('a'); a.href = url; a.download = r.namaFile || 'hasil-mcu.pdf';
+    document.body.appendChild(a); a.click(); a.remove();
+    const m = say('Hasil untuk ' + r.nama + ' siap. Jika unduhan tidak mulai, ', 'ok');
+    const l = document.createElement('a'); l.href = url; l.target = '_blank'; l.rel = 'noopener'; l.textContent = 'buka PDF di sini'; m.appendChild(l);
+    $('kode').value = '';
+  }catch(e){
+    say(e instanceof TypeError ? 'Tidak bisa terhubung. Cek koneksi internet Anda.' : e.message, 'err');
+  }
+  b.disabled = false; b.textContent = 'Unduh PDF';
+}
+$('go').onclick = unduh;
+['nik','kode'].forEach(id => $(id).addEventListener('keydown', e => { if(e.key==='Enter') unduh(); }));
+</script>
+</body>
+</html>
