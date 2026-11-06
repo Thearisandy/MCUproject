@@ -100,6 +100,13 @@ input[type=text]:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3p
 .mo input{width:18px;height:18px;accent-color:var(--teal)}
 @media (max-width:800px){.frm{grid-template-columns:1fr}}
 .btn.sm{padding:6px 12px;font-size:13px;border-radius:8px}
+.flt{font:inherit;padding:12px;border:1.5px solid var(--line);border-radius:12px;background:#fff;color:var(--ink)}
+.pcs{white-space:normal;min-width:300px;max-width:420px}
+.pc{display:inline-block;font-size:11px;font-weight:600;padding:3px 8px;border-radius:99px;margin:2px 4px 2px 0;background:var(--track);color:var(--muted)}
+.pc.d{background:#dcf3ec;color:var(--ok)}
+.pc.na,.chip.na{background:#fff;border:1px dashed var(--line);color:#a3adba;text-decoration:line-through}
+.l-teal{color:var(--teal)}
+@media (max-width:800px){.flt{flex:1 1 100%}}
 body.lihat .tdh{display:none}
 /* Peserta */
 .tw{overflow-x:auto;margin-top:14px}
@@ -149,7 +156,7 @@ th{font-size:12.5px;color:var(--muted);font-weight:600;border-top:0}
         <div class="muted" style="font-size:13.5px">Kehadiran peserta</div>
         <div class="sum"><span class="big" id="nHadir">0</span> dari <span id="nTotal">0</span> peserta sudah check in. <span id="nSisa">0</span> belum hadir.</div>
         <div class="bar"><i id="bar"></i></div>
-        <div class="legend"><span class="l-ok">Hadir <b id="lHadir">0</b></span><span class="l-bad">Belum hadir <b id="lBelum">0</b></span></div>
+        <div class="legend"><span class="l-ok">Hadir <b id="lHadir">0</b></span><span class="l-bad">Belum hadir <b id="lBelum">0</b></span><span class="l-teal">Lengkap <b id="lLengkap">0</b></span></div>
       </div>
       <div class="grid">
         <div class="card"><h3>Check in terbaru</h3><ul class="list" id="terbaru"></ul></div>
@@ -183,8 +190,13 @@ th{font-size:12.5px;color:var(--muted);font-weight:600;border-top:0}
     <section id="v-peserta" class="hide">
       <h1>Peserta</h1>
       <div class="card">
-        <input type="text" id="q" placeholder="Cari nama, NIK, NIP, atau departemen" aria-label="Cari peserta">
-        <div class="tw"><table><thead><tr><th>Nama</th><th>NIK</th><th>Departemen</th><th>Status</th><th>Jam</th><th class="tdh">Hasil</th></tr></thead><tbody id="tbody"></tbody></table></div>
+        <div class="scanrow">
+          <input type="text" id="q" placeholder="Cari nama, NIK, NIP, atau departemen" aria-label="Cari peserta">
+          <select id="fStatus" class="flt" aria-label="Filter status"><option value="">Semua status</option><option value="belum">Belum hadir</option><option value="proses">Belum lengkap</option><option value="lengkap">Lengkap</option></select>
+          <select id="fBelum" class="flt" aria-label="Belum melakukan pemeriksaan"><option value="">Belum melakukan: semua</option></select>
+        </div>
+        <p class="muted" id="jmlP" style="margin:12px 2px 0;font-size:13px"></p>
+        <div class="tw"><table><thead><tr><th>Nama</th><th>NIK</th><th>Departemen</th><th>Status</th><th>Pemeriksaan</th><th>Jam</th><th class="tdh">Hasil</th></tr></thead><tbody id="tbody"></tbody></table></div>
       </div>
     </section>
     <!-- Barcode -->
@@ -297,29 +309,48 @@ $('rstGo').onclick = () => {
 
 /* Data & render */
 function load(){
-  call('data').then(r => { if(!r.ok) throw new Error(r.pesan); DATA = r.data; renderDash(); renderTable(); if(!$('v-barcode').classList.contains('hide')) renderBarcode(); renderModes(); })
+  call('data').then(r => { if(!r.ok) throw new Error(r.pesan); DATA = r.data; renderDash(); renderTable(); if(!$('v-barcode').classList.contains('hide')) renderBarcode(); renderModes(); isiFilter(); renderTable(); })
     .catch(e => toast(e.message, true));
 }
 function renderDash(){
   const total = DATA.length, hadir = DATA.filter(d=>d.hadir).length;
   $('nHadir').textContent=hadir; $('nTotal').textContent=total; $('nSisa').textContent=total-hadir;
   $('lHadir').textContent=hadir; $('lBelum').textContent=total-hadir;
+  $('lLengkap').textContent = DATA.filter(d => statusDari(d).k==='lengkap').length;
   $('bar').style.width = total ? (hadir/total*100)+'%' : '0';
   const recent = DATA.filter(d=>d.hadir && d.jam).slice(-8).reverse();
   $('terbaru').innerHTML = recent.length ? recent.map(d=>`<li><span>${esc(d.nama)}</span><span class="muted">${esc(d.jam)}</span></li>`).join('') : '<li class="empty">Belum ada yang check in.</li>';
-  const st = {}; DATA.forEach(d => (d.stasiun||[]).forEach(x => { st[x.label]=st[x.label]||0; if(x.done) st[x.label]++; }));
-  $('perGrup').innerHTML = Object.keys(st).length ? Object.entries(st).map(([k,v])=>`<li><span>${esc(k)}</span><span class="muted">${v} / ${total}</span></li>`).join('') : '<li class="empty">Belum ada data pemeriksaan.</li>';
+  const st = {}; DATA.forEach(d => (d.stasiun||[]).forEach(x => { st[x.label] = st[x.label] || {d:0, t:0}; if(x.req !== false){ st[x.label].t++; if(x.done) st[x.label].d++; } }));
+  $('perGrup').innerHTML = Object.keys(st).length ? Object.entries(st).map(([k,v]) => `<li><span>${esc(k)}</span><span class="muted">${v.d} / ${v.t}</span></li>`).join('') : '<li class="empty">Belum ada data pemeriksaan.</li>';
   const g = {}; DATA.forEach(d => { const k = d.grup || '-'; g[k] = g[k] || {h:0,t:0}; g[k].t++; if(d.hadir) g[k].h++; });
   const ks = Object.keys(g).sort();
   $('perDept').parentElement.classList.toggle('hide', ks.length===0 || (ks.length===1 && ks[0]==='-'));
   $('perDept').innerHTML = ks.map(k => `<li><span>${esc(k)}</span><span class="muted">${g[k].h} / ${g[k].t}</span></li>`).join('');
 }
+function wajibList(d){ return (d.stasiun || []).filter(x => x.req !== false); }
+function statusDari(d){
+  const st = wajibList(d), n = st.filter(x => x.done).length, semua = d.stasiun || [];
+  if(!d.hadir) return semua.some(x => x.done) ? {k:'belum', t:'Belum check in', c:'b-warn'} : {k:'belum', t:'Belum hadir', c:'b-bad'};
+  if(st.length && n===st.length) return {k:'lengkap', t:'Lengkap', c:'b-ok'};
+  return st.length ? {k:'proses', t:'Belum lengkap '+n+'/'+st.length, c:'b-warn'} : {k:'proses', t:'Hadir', c:'b-ok'};
+}
+function isiFilter(){
+  const sel = $('fBelum'), cur = sel.value, labs = ((DATA[0]||{}).stasiun||[]).map(x => x.label);
+  sel.innerHTML = '<option value="">Belum melakukan: semua</option>' + labs.map(l => `<option ${l===cur?'selected':''}>${esc(l)}</option>`).join('');
+}
 function renderTable(){
-  const q = $('q').value.trim().toLowerCase();
-  const rows = DATA.filter(d => !q || d.nama.toLowerCase().includes(q) || d.kode.toLowerCase().includes(q) || (d.grup||'').toLowerCase().includes(q) || (d.nip||'').toLowerCase().includes(q));
-  $('tbody').innerHTML = rows.length ? rows.map(d=>`<tr><td>${esc(d.nama)}</td><td>${esc(d.kode)}</td><td>${esc(d.grup)}</td><td><span class="badge ${d.hadir?'b-ok':'b-bad'}" style="margin:0">${d.hadir?'Hadir':'Belum hadir'}</span></td><td class="muted">${esc(d.jam)||'-'}</td><td class="tdh"><button class="btn ghost sm" data-hasil="${esc(d.kode)}">Unduh</button></td></tr>`).join('') : '<tr><td colspan="6" class="empty">Peserta tidak ditemukan.</td></tr>';
+  const q = $('q').value.trim().toLowerCase(), fs = $('fStatus').value, fb = $('fBelum').value;
+  const rows = DATA.filter(d => {
+    if(q && !(d.nama.toLowerCase().includes(q) || d.kode.toLowerCase().includes(q) || (d.grup||'').toLowerCase().includes(q) || (d.nip||'').toLowerCase().includes(q))) return false;
+    if(fs && statusDari(d).k !== fs) return false;
+    if(fb){ const x = (d.stasiun||[]).find(z => z.label===fb); if(!x || x.done || x.req === false) return false; }
+    return true;
+  });
+  $('jmlP').textContent = rows.length + ' dari ' + DATA.length + ' peserta';
+  $('tbody').innerHTML = rows.length ? rows.map(d => { const s = statusDari(d); return `<tr><td>${esc(d.nama)}</td><td>${esc(d.kode)}</td><td>${esc(d.grup)}</td><td><span class="badge ${s.c}" style="margin:0">${esc(s.t)}</span></td><td class="pcs">${(d.stasiun||[]).map(x => `<span class="pc ${x.req===false?'na':(x.done?'d':'')}" title="${esc(x.label)}: ${x.req===false?'tidak wajib untuk peserta ini':(x.done?'sudah':'belum')}">${esc(x.label)}</span>`).join('')}</td><td class="muted">${esc(d.jam)||'-'}</td><td class="tdh"><button class="btn ghost sm" data-hasil="${esc(d.kode)}">Unduh</button></td></tr>`; }).join('') : '<tr><td colspan="7" class="empty">Peserta tidak ditemukan.</td></tr>';
 }
 $('q').oninput = renderTable;
+$('fStatus').onchange = renderTable; $('fBelum').onchange = renderTable;
 
 /* Barcode */
 function barcodeRows(){
@@ -444,14 +475,14 @@ function tampil(r, noauto){
   const done = mode==='CHECKIN' ? p.hadir : !!(st && st.done);
   const nm = mode==='CHECKIN' ? 'check in' : mode;
   const badge = done ? `<span class="badge b-warn">Sudah ${esc(nm)}${mode==='CHECKIN'&&p.jam?' pukul '+esc(p.jam):''}</span>` : `<span class="badge b-bad">Belum ${esc(nm)}</span>`;
-  const warnCI = (mode!=='CHECKIN' && !p.hadir) ? '<span class="badge b-bad" style="margin-left:8px">Belum check in</span>' : '';
+  const warnCI = ((mode!=='CHECKIN' && !p.hadir) ? '<span class="badge b-bad" style="margin-left:8px">Belum check in</span>' : '') + ((st && st.req===false) ? '<span class="badge b-warn" style="margin-left:8px">Tidak wajib untuk peserta ini</span>' : '');
   const fields = SCHEMA[mode], isForm = !!fields && mode!=='CHECKIN';
   const btnHtml = `<button class="btn go" id="btnGo" ${done?'disabled':''}>${done?'Sudah '+esc(nm):(mode==='CHECKIN'?'Check in':'Tandai '+esc(mode)+' selesai')}</button>`;
   const formStr = isForm ? formHtml(fields, p.form) + `<button class="btn go" id="btnGo">${done?'Perbarui':'Send'}</button>` : '';
   $('hasil').innerHTML = `<div class="card">
     <div class="who">${esc(p.nama)}</div>${badge}${warnCI}
     <div class="det">${p.detail.map(d=>`<div><small>${esc(d.label)}</small><span>${esc(d.value)}</span></div>`).join('')}</div>
-    <div class="chips">${(p.stasiun||[]).map(x=>`<span class="chip ${x.done?'done':''}">${esc(x.label)}</span>`).join('')}</div>
+    <div class="chips">${(p.stasiun||[]).map(x=>`<span class="chip ${x.req===false?'na':(x.done?'done':'')}" title="${x.req===false?'Tidak wajib untuk peserta ini':''}">${esc(x.label)}</span>`).join('')}</div>
     ${isForm ? formStr : btnHtml}
     ${done && mode!=='CHECKIN' ? `<button class="btn ghost" id="btnUndo" style="width:100%;margin-top:10px">Batalkan ${esc(mode)}</button>` : ''}
     <button class="btn ghost" id="btnHasil" style="width:100%;margin-top:10px">Unduh hasil (PDF)</button></div>`;
