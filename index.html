@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
 <meta charset="utf-8">
-<title>PT. OTSUKA INDONESIA</title>
+<title>Check-in MCU</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="config.js"></script>
@@ -133,12 +133,32 @@ th{font-size:12.5px;color:var(--muted);font-weight:600;border-top:0}
 }
 .mtitle{display:none;font-weight:800;color:var(--teal);font-size:13px;margin-bottom:4px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+/* Perbaikan lebar: konten boleh menyusut, tabel menggulir di dalam kartunya sendiri */
+main{min-width:0}
+.tw{max-width:100%}
+#v-peserta td{white-space:normal;vertical-align:top}
+#v-peserta td.pcs{min-width:240px}
+#v-peserta .badge{white-space:nowrap}
+.nipc{display:inline-block;font-size:12px;font-weight:700;color:var(--teal);background:#e4f3f4;border-radius:99px;padding:2px 9px;margin-left:8px;vertical-align:middle;white-space:nowrap}
+.sub{display:block;color:var(--muted);font-size:12.5px;margin-top:2px;font-weight:400}
+@media (max-width:800px){
+  .tw{overflow-x:visible}
+  #v-peserta table,#v-peserta tbody,#v-peserta tr,#v-peserta td{display:block;width:100%}
+  #v-peserta thead{display:none}
+  #v-peserta tr{border-top:1px solid var(--line);padding:12px 0}
+  #v-peserta tr:first-child{border-top:0}
+  #v-peserta td{border:0;padding:3px 0;white-space:normal}
+  #v-peserta td:first-child{font-size:15px}
+  #v-peserta td.pcs{min-width:0;max-width:none;padding:6px 0}
+  #v-peserta td.tdh{padding-top:8px}
+  .card{padding:16px 14px}
+}
 </style>
 </head>
 <body>
 <div class="app">
   <nav class="side" aria-label="Menu utama">
-    <div class="brand">PT. OTSUKA INDONESIA</div>
+    <div class="brand">Check-in MCU</div>
     <button class="nav on" data-v="dash">Dashboard</button>
     <button class="nav" data-v="cek">Scan</button>
     <button class="nav" data-v="peserta">Peserta</button>
@@ -191,12 +211,12 @@ th{font-size:12.5px;color:var(--muted);font-weight:600;border-top:0}
       <h1>Peserta</h1>
       <div class="card">
         <div class="scanrow">
-          <input type="text" id="q" placeholder="Cari nama, NIK, NIP, atau departemen" aria-label="Cari peserta">
+          <input type="text" id="q" placeholder="Cari berdasarkan NIP" aria-label="Cari NIP" inputmode="search">
           <select id="fStatus" class="flt" aria-label="Filter status"><option value="">Semua status</option><option value="belum">Belum hadir</option><option value="proses">Belum lengkap</option><option value="lengkap">Lengkap</option></select>
           <select id="fBelum" class="flt" aria-label="Belum melakukan pemeriksaan"><option value="">Belum melakukan: semua</option></select>
         </div>
         <p class="muted" id="jmlP" style="margin:12px 2px 0;font-size:13px"></p>
-        <div class="tw"><table><thead><tr><th>Nama</th><th>NIK</th><th>Departemen</th><th>Status</th><th>Pemeriksaan</th><th>Jam</th><th class="tdh">Hasil</th></tr></thead><tbody id="tbody"></tbody></table></div>
+        <div class="tw"><table><thead><tr><th>Peserta</th><th>Status</th><th>Pemeriksaan</th><th class="tdh">Hasil</th></tr></thead><tbody id="tbody"></tbody></table></div>
       </div>
     </section>
     <!-- Barcode -->
@@ -217,7 +237,7 @@ th{font-size:12.5px;color:var(--muted);font-weight:600;border-top:0}
 </div>
 <div id="login" role="dialog" aria-label="Masuk">
   <div class="lbox">
-    <h1 style="margin-bottom:6px">PT OTSUKA INDONESIA</h1>
+    <h1 style="margin-bottom:6px">Check-in MCU</h1>
     <p class="muted" style="margin-bottom:14px">Masuk dengan akun Anda.</p>
     <input type="text" id="user" placeholder="Username" autocomplete="username" autocapitalize="none" style="width:100%;margin-bottom:10px">
     <input type="password" id="pin" placeholder="PIN" autocomplete="current-password" style="width:100%;font:inherit;padding:13px 14px;border:1.5px solid var(--line);border-radius:12px">
@@ -341,13 +361,14 @@ function isiFilter(){
 function renderTable(){
   const q = $('q').value.trim().toLowerCase(), fs = $('fStatus').value, fb = $('fBelum').value;
   const rows = DATA.filter(d => {
-    if(q && !(d.nama.toLowerCase().includes(q) || d.kode.toLowerCase().includes(q) || (d.grup||'').toLowerCase().includes(q) || (d.nip||'').toLowerCase().includes(q))) return false;
+    if(q && !(d.nip||'').toLowerCase().includes(q)) return false;
     if(fs && statusDari(d).k !== fs) return false;
     if(fb){ const x = (d.stasiun||[]).find(z => z.label===fb); if(!x || x.done || x.req === false) return false; }
     return true;
   });
   $('jmlP').textContent = rows.length + ' dari ' + DATA.length + ' peserta';
-  $('tbody').innerHTML = rows.length ? rows.map(d => { const s = statusDari(d); return `<tr><td>${esc(d.nama)}</td><td>${esc(d.kode)}</td><td>${esc(d.grup)}</td><td><span class="badge ${s.c}" style="margin:0">${esc(s.t)}</span></td><td class="pcs">${(d.stasiun||[]).map(x => `<span class="pc ${x.req===false?'na':(x.done?'d':'')}" title="${esc(x.label)}: ${x.req===false?'tidak wajib untuk peserta ini':(x.done?'sudah':'belum')}">${esc(x.label)}</span>`).join('')}</td><td class="muted">${esc(d.jam)||'-'}</td><td class="tdh"><button class="btn ghost sm" data-hasil="${esc(d.kode)}">Unduh</button></td></tr>`; }).join('') : '<tr><td colspan="7" class="empty">Peserta tidak ditemukan.</td></tr>';
+  $('tbody').innerHTML = rows.length ? rows.map(d => { const s = statusDari(d), info = ['NIK '+d.kode, d.grup].filter(Boolean).join(' · ');
+    return `<tr><td><b>${esc(d.nama)}</b><span class="nipc">NIP ${esc(d.nip||'-')}</span><span class="sub">${esc(info)}</span></td><td><span class="badge ${s.c}" style="margin:0">${esc(s.t)}</span>${d.jam?`<span class="sub">Check in ${esc(d.jam)}</span>`:''}</td><td class="pcs">${(d.stasiun||[]).map(x => `<span class="pc ${x.req===false?'na':(x.done?'d':'')}" title="${esc(x.label)}: ${x.req===false?'tidak wajib untuk peserta ini':(x.done?'sudah':'belum')}">${esc(x.label)}</span>`).join('')}</td><td class="tdh"><button class="btn ghost sm" data-hasil="${esc(d.kode)}">Unduh</button></td></tr>`; }).join('') : '<tr><td colspan="4" class="empty">Peserta tidak ditemukan.</td></tr>';
 }
 $('q').oninput = renderTable;
 $('fStatus').onchange = renderTable; $('fBelum').onchange = renderTable;
